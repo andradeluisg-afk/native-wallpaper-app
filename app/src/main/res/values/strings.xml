@@ -1,0 +1,35 @@
+<resources>
+    <string name="app_name">WallFlow</string>
+    <string name="app_subtitle">Cambiador Automático de Fondos</string>
+    
+    <!-- Pestañas -->
+    <string name="tab_home">Inicio</string>
+    <string name="tab_lock">Bloqueo</string>
+    
+    <!-- Configuración general -->
+    <string name="service_active_label">Servicio en Segundo Plano</string>
+    <string name="service_active_desc">Escucha desbloqueos y cambios en tiempo real</string>
+    <string name="btn_change_now">Cambiar Fondos Ahora</string>
+    
+    <!-- Secciones de pantalla -->
+    <string name="lbl_folder">Carpeta de imágenes</string>
+    <string name="btn_select_folder">Seleccionar Carpeta</string>
+    <string name="no_folder_selected">Ninguna carpeta seleccionada</string>
+    
+    <string name="lbl_trigger">Disparador de Cambio</string>
+    <string name="trigger_time">Por tiempo (Intervalo)</string>
+    <string name="trigger_unlock">Al bloquear/desbloquear</string>
+    <string name="lbl_interval">Frecuencia de cambio</string>
+    
+    <string name="lbl_fit_mode">Ajuste de Imagen</string>
+    <string name="fit_fill">Relleno (Cortar)</string>
+    <string name="fit_stretch">Estirar</string>
+    <string name="fit_fit">Ajustar (Zoom Out)</string>
+    
+    <string name="lbl_brightness">Brillo de Imagen</string>
+    <string name="lbl_order">Orden de Selección</string>
+    <string name="order_random">Aleatorio</string>
+    <string name="order_sequential">Secuencial</string>
+    
+    <string name="lbl_preview">Vista Previa</string>
+</resources>
