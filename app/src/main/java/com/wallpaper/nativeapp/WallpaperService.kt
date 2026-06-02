@@ -43,7 +43,8 @@ class WallpaperService : Service() {
                     // para que ya esté listo cuando el usuario vuelva a encender el celular.
                     val lockEnabled = prefs.getBoolean("lock_enabled", false)
                     val lockTrigger = prefs.getString("lock_trigger", "time")
-                    if (lockEnabled && lockTrigger == "unlock") {
+                    val lockPaused = prefs.getBoolean("lock_paused", false)
+                    if (lockEnabled && lockTrigger == "unlock" && !lockPaused) {
                         Log.d(TAG, "Pantalla apagada: Cambiando fondo de BLOQUEO en segundo plano.")
                         WallpaperHelper.changeWallpaper(this@WallpaperService, isLockScreen = true)
                     }

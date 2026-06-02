@@ -53,17 +53,32 @@
 
         <!-- Proveedor del Widget de Pantalla de Inicio (v0.3) -->
         <receiver
-            android:name=".WallpaperWidget"
+            android:name=".WallpaperWidgetHome"
             android:exported="true"
-            android:label="WallFlow Control">
+            android:label="WallFlow Inicio">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="com.wallpaper.nativeapp.ACTION_WIDGET_NEXT" />
-                <action android:name="com.wallpaper.nativeapp.ACTION_WIDGET_TOGGLE_PAUSE" />
+                <action android:name="com.wallpaper.nativeapp.ACTION_WIDGET_HOME_NEXT" />
+                <action android:name="com.wallpaper.nativeapp.ACTION_WIDGET_HOME_TOGGLE_PAUSE" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_home_info" />
+        </receiver>
+
+        <!-- Proveedor del Widget de Pantalla de Bloqueo (v0.3) -->
+        <receiver
+            android:name=".WallpaperWidgetLock"
+            android:exported="true"
+            android:label="WallFlow Bloqueo">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.wallpaper.nativeapp.ACTION_WIDGET_LOCK_NEXT" />
+                <action android:name="com.wallpaper.nativeapp.ACTION_WIDGET_LOCK_TOGGLE_PAUSE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_lock_info" />
         </receiver>
 
         <!-- Proveedor de WorkManager para inicialización automática -->

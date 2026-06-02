@@ -45,7 +45,8 @@ class WallpaperWorker(
         // 2. Verificar Pantalla de Bloqueo
         val lockEnabled = prefs.getBoolean("lock_enabled", false)
         val lockTrigger = prefs.getString("lock_trigger", "time")
-        if (lockEnabled && lockTrigger == "time") {
+        val lockPaused = prefs.getBoolean("lock_paused", false)
+        if (lockEnabled && lockTrigger == "time" && !lockPaused) {
             val lockIntervalMin = prefs.getInt("lock_interval", 60) // por defecto 60 min
             val intervalMs = lockIntervalMin * 60 * 1000L
             val lastChange = prefs.getLong("lock_last_change", 0L)

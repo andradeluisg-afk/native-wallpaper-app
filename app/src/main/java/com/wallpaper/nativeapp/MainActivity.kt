@@ -1,6 +1,8 @@
 package com.wallpaper.nativeapp
 
 import android.app.Activity
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -40,6 +42,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var switchHomeActive: SwitchCompat
     private lateinit var tvHomeStatusTitle: TextView
     private lateinit var tvHomeStatusDesc: TextView
+
+    private lateinit var switchLockActive: SwitchCompat
+    private lateinit var tvLockStatusTitle: TextView
+    private lateinit var tvLockStatusDesc: TextView
 
     // Home settings views
     private lateinit var tvHomeFolderStatus: TextView
@@ -130,6 +136,10 @@ class MainActivity : AppCompatActivity() {
         switchHomeActive = findViewById(R.id.switch_home_active)
         tvHomeStatusTitle = findViewById(R.id.tv_home_status_title)
         tvHomeStatusDesc = findViewById(R.id.tv_home_status_desc)
+
+        switchLockActive = findViewById(R.id.switch_lock_active)
+        tvLockStatusTitle = findViewById(R.id.tv_lock_status_title)
+        tvLockStatusDesc = findViewById(R.id.tv_lock_status_desc)
 
         // Home settings
         tvHomeFolderStatus = findViewById(R.id.tv_home_folder_status)
@@ -250,7 +260,11 @@ class MainActivity : AppCompatActivity() {
         val homeOrder = prefs.getString("home_order", "random")
         if (homeOrder == "random") rbHomeOrderRandom.isChecked = true else rbHomeOrderSequential.isChecked = true
 
-        // CONFIGURACIÓN PANTALLA BLOQUEO
+        // CONFIGURACIÓN PANTALLA BLOQUEO (v0.3 pausa/play)
+        val lockPaused = prefs.getBoolean("lock_paused", false)
+        switchLockActive.isChecked = !lockPaused
+        updateLockActiveTexts(!lockPaused)
+
         val lockFolder = prefs.getString("lock_folder_uri", null)
         updateFolderUI(lockFolder, isLockScreen = true)
 
@@ -304,7 +318,16 @@ class MainActivity : AppCompatActivity() {
             updateHomeActiveTexts(isChecked)
             
             // Avisar al widget para que se redibuje inmediatamente
-            notifyWidgetsOfPauseChange()
+            notifyWidgetsOfPauseChange(isLockScreen = false)
+        }
+
+        // Toggle de pausa de rotación de bloqueo (v0.3)
+        switchLockActive.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean("lock_paused", !isChecked).apply()
+            updateLockActiveTexts(isChecked)
+            
+            // Avisar al widget para que se redibuje inmediatamente
+            notifyWidgetsOfPauseChange(isLockScreen = true)
         }
 
         // Botón Cambiar fondo ahora
@@ -655,6 +678,16 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
+        } else if (key == "lock_paused") {
+            val isPaused = sharedPreferences.getBoolean("lock_paused", false)
+            runOnUiThread {
+                if (::switchLockActive.isInitialized) {
+                    if (switchLockActive.isChecked == isPaused) {
+                        switchLockActive.isChecked = !isPaused
+                        updateLockActiveTexts(!isPaused)
+                    }
+                }
+            }
         }
     }
 
@@ -662,10 +695,15 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         prefs.registerOnSharedPreferenceChangeListener(prefsListener)
         // Refrescar en caso de que haya cambiado desde el Widget mientras la app estaba oculta
-        val isPaused = prefs.getBoolean("home_paused", false)
+        val homePaused = prefs.getBoolean("home_paused", false)
         if (::switchHomeActive.isInitialized) {
-            switchHomeActive.isChecked = !isPaused
-            updateHomeActiveTexts(!isPaused)
+            switchHomeActive.isChecked = !homePaused
+            updateHomeActiveTexts(!homePaused)
+        }
+        val lockPaused = prefs.getBoolean("lock_paused", false)
+        if (::switchLockActive.isInitialized) {
+            switchLockActive.isChecked = !lockPaused
+            updateLockActiveTexts(!lockPaused)
         }
     }
 
@@ -686,12 +724,25 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun notifyWidgetsOfPauseChange() {
-        val widgetIntent = Intent(this, WallpaperWidget::class.java).apply {
+    private fun updateLockActiveTexts(isActive: Boolean) {
+        if (isActive) {
+            tvLockStatusTitle.text = "Rotación: Activa"
+            tvLockStatusDesc.text = "La imagen cambiará automáticamente según la configuración."
+            tvLockStatusTitle.setTextColor(resources.getColor(R.color.text_primary, theme))
+        } else {
+            tvLockStatusTitle.text = "Rotación: Pausada"
+            tvLockStatusDesc.text = "La auto-rotación de bloqueo está detenida. Cambios manuales permitidos."
+            tvLockStatusTitle.setTextColor(resources.getColor(R.color.secondary, theme)) // color Cyan para resaltar pausa
+        }
+    }
+
+    private fun notifyWidgetsOfPauseChange(isLockScreen: Boolean) {
+        val providerClass = if (isLockScreen) WallpaperWidgetLock::class.java else WallpaperWidgetHome::class.java
+        val widgetIntent = Intent(this, providerClass).apply {
             action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
         }
         val appWidgetManager = AppWidgetManager.getInstance(application)
-        val thisWidget = ComponentName(application, WallpaperWidget::class.java)
+        val thisWidget = ComponentName(application, providerClass)
         val ids = appWidgetManager.getAppWidgetIds(thisWidget)
         widgetIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
         sendBroadcast(widgetIntent)
