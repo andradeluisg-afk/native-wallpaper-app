@@ -339,9 +339,9 @@
                         android:layout_height="wrap_content"
                         android:max="100"
                         android:progress="100"
-                        app:thumbTint="@color/secondary"
-                        app:trackActiveTint="@color/secondary"
-                        app:trackInactiveTint="@color/card_border" />
+                        android:thumbTint="@color/secondary"
+                        android:progressTint="@color/secondary"
+                        android:progressBackgroundTint="@color/card_border" />
                 </LinearLayout>
 
                 <!-- Tarjeta 5: Orden de Selección -->
@@ -678,9 +678,9 @@
                         android:layout_height="wrap_content"
                         android:max="100"
                         android:progress="100"
-                        app:thumbTint="@color/secondary"
-                        app:trackActiveTint="@color/secondary"
-                        app:trackInactiveTint="@color/card_border" />
+                        android:thumbTint="@color/secondary"
+                        android:progressTint="@color/secondary"
+                        android:progressBackgroundTint="@color/card_border" />
                 </LinearLayout>
 
                 <!-- Tarjeta 5: Orden de Selección -->
