@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -12,6 +13,7 @@ import android.util.Log
 import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.SwitchCompat
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
@@ -493,15 +495,7 @@ class MainActivity : AppCompatActivity() {
         
         activityScope.launch {
             val bitmap = withContext(Dispatchers.IO) {
-                // Reducimos la imagen a un tamaño pequeño óptimo para la previsualización en miniatura (300x600 px)
-                WallpaperHelper.processBitmap(
-                    WallpaperHelper.processBitmap(
-                        // Primero decodificamos el bitmap con una muestra segura
-                        WallpaperHelper.processBitmap(Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888), 1, 1, "fill", 100)!!, 1, 1, "fill", 100
-                    )!!, // placeholder
-                    300, 600, "fill", 100
-                ) // Evita llamadas redundantes.
-                // Decodificar el archivo real de forma segura
+                // Decodificar el archivo real de forma segura y reducir su escala
                 try {
                     val options = android.graphics.BitmapFactory.Options().apply {
                         inJustDecodeBounds = true
