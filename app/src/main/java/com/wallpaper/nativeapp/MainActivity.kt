@@ -36,6 +36,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var layoutHomeSettings: LinearLayout
     private lateinit var layoutLockSettings: LinearLayout
 
+    // v0.3 Pause/Active state
+    private lateinit var switchHomeActive: SwitchCompat
+    private lateinit var tvHomeStatusTitle: TextView
+    private lateinit var tvHomeStatusDesc: TextView
+
     // Home settings views
     private lateinit var tvHomeFolderStatus: TextView
     private lateinit var tvHomeImageCount: TextView
@@ -122,6 +127,10 @@ class MainActivity : AppCompatActivity() {
         layoutHomeSettings = findViewById(R.id.layout_home_settings)
         layoutLockSettings = findViewById(R.id.layout_lock_settings)
 
+        switchHomeActive = findViewById(R.id.switch_home_active)
+        tvHomeStatusTitle = findViewById(R.id.tv_home_status_title)
+        tvHomeStatusDesc = findViewById(R.id.tv_home_status_desc)
+
         // Home settings
         tvHomeFolderStatus = findViewById(R.id.tv_home_folder_status)
         tvHomeImageCount = findViewById(R.id.tv_home_image_count)
@@ -197,7 +206,11 @@ class MainActivity : AppCompatActivity() {
         // Cargar servicio global
         switchService.isChecked = prefs.getBoolean("service_active", false)
 
-        // CONFIGURACIÓN PANTALLA INICIO
+        // CONFIGURACIÓN PANTALLA INICIO (v0.3 pausa/play)
+        val homePaused = prefs.getBoolean("home_paused", false)
+        switchHomeActive.isChecked = !homePaused
+        updateHomeActiveTexts(!homePaused)
+
         val homeFolder = prefs.getString("home_folder_uri", null)
         updateFolderUI(homeFolder, isLockScreen = false)
 
@@ -283,6 +296,15 @@ class MainActivity : AppCompatActivity() {
         switchService.setOnCheckedChangeListener { _, isChecked ->
             prefs.edit().putBoolean("service_active", isChecked).apply()
             rescheduleJobs()
+        }
+
+        // Toggle de pausa de rotación de inicio (v0.3)
+        switchHomeActive.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean("home_paused", !isChecked).apply()
+            updateHomeActiveTexts(isChecked)
+            
+            // Avisar al widget para que se redibuje inmediatamente
+            notifyWidgetsOfPauseChange()
         }
 
         // Botón Cambiar fondo ahora
@@ -620,5 +642,58 @@ class MainActivity : AppCompatActivity() {
             Log.d(TAG, "Cancelando tarea de WorkManager...")
             workManager.cancelUniqueWork("wallpaper_periodic_work")
         }
+    }
+
+    private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { sharedPreferences, key ->
+        if (key == "home_paused") {
+            val isPaused = sharedPreferences.getBoolean("home_paused", false)
+            runOnUiThread {
+                if (::switchHomeActive.isInitialized) {
+                    if (switchHomeActive.isChecked == isPaused) {
+                        switchHomeActive.isChecked = !isPaused
+                        updateHomeActiveTexts(!isPaused)
+                    }
+                }
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        prefs.registerOnSharedPreferenceChangeListener(prefsListener)
+        // Refrescar en caso de que haya cambiado desde el Widget mientras la app estaba oculta
+        val isPaused = prefs.getBoolean("home_paused", false)
+        if (::switchHomeActive.isInitialized) {
+            switchHomeActive.isChecked = !isPaused
+            updateHomeActiveTexts(!isPaused)
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
+    }
+
+    private fun updateHomeActiveTexts(isActive: Boolean) {
+        if (isActive) {
+            tvHomeStatusTitle.text = "Rotación: Activa"
+            tvHomeStatusDesc.text = "La imagen cambiará automáticamente según la configuración."
+            tvHomeStatusTitle.setTextColor(resources.getColor(R.color.text_primary, theme))
+        } else {
+            tvHomeStatusTitle.text = "Rotación: Pausada"
+            tvHomeStatusDesc.text = "La auto-rotación de inicio está detenida. Cambios manuales permitidos."
+            tvHomeStatusTitle.setTextColor(resources.getColor(R.color.secondary, theme)) // color Cyan para resaltar pausa
+        }
+    }
+
+    private fun notifyWidgetsOfPauseChange() {
+        val widgetIntent = Intent(this, WallpaperWidget::class.java).apply {
+            action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
+        }
+        val appWidgetManager = AppWidgetManager.getInstance(application)
+        val thisWidget = ComponentName(application, WallpaperWidget::class.java)
+        val ids = appWidgetManager.getAppWidgetIds(thisWidget)
+        widgetIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
+        sendBroadcast(widgetIntent)
     }
 }

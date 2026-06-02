@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Tarjeta trasera (Fondo de pantalla apilado 1) -->
+    <path
+        android:pathData="M34,26 L58,26 C61.3,26 64,28.7 64,32 L64,68 C64,71.3 61.3,74 58,74 L34,74 C30.7,74 28,71.3 28,68 L28,32 C28,28.7 30.7,26 34,26 Z"
+        android:strokeWidth="2"
+        android:strokeColor="@color/primary">
+        <gradient
+            android:type="linear"
+            android:startX="28"
+            android:startY="26"
+            android:endX="64"
+            android:endY="74">
+            <item android:offset="0" android:color="#2A2F45" />
+            <item android:offset="1" android:color="#131622" />
+        </gradient>
+    </path>
+
+    <!-- Tarjeta delantera (Fondo de pantalla principal 2) -->
+    <path
+        android:pathData="M48,34 L72,34 C75.3,34 78,36.7 78,40 L78,76 C78,79.3 75.3,82 72,82 L48,82 C44.7,82 42,79.3 42,76 L42,40 C42,36.7 44.7,34 48,34 Z"
+        android:strokeWidth="2.5"
+        android:strokeColor="@color/secondary">
+        <gradient
+            android:type="linear"
+            android:startX="42"
+            android:startY="34"
+            android:endX="78"
+            android:endY="82">
+            <item android:offset="0" android:color="#1A2235" />
+            <item android:offset="1" android:color="#0B0F19" />
+        </gradient>
+    </path>
+
+    <!-- Detalle decorativo de paisaje en la tarjeta delantera (representando un wallpaper) -->
+    <path
+        android:pathData="M46,72 L54,62 L60,69 L66,58 L74,72 Z"
+        android:fillColor="@color/primary"
+        android:alpha="0.6"/>
+
+    <path
+        android:pathData="M66,48 C68.2,48 70,46.2 70,44 C70,41.8 68.2,40 66,40 C63.8,40 62,41.8 62,44 C62,46.2 63.8,48 66,48 Z"
+        android:fillColor="@color/secondary"
+        android:alpha="0.8" />
+
+</vector>

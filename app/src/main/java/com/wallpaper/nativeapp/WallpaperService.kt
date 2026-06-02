@@ -51,7 +51,8 @@ class WallpaperService : Service() {
                     // El usuario desbloqueó el celular. Cambiamos el fondo de inicio.
                     val homeEnabled = prefs.getBoolean("home_enabled", false)
                     val homeTrigger = prefs.getString("home_trigger", "time")
-                    if (homeEnabled && homeTrigger == "unlock") {
+                    val homePaused = prefs.getBoolean("home_paused", false)
+                    if (homeEnabled && homeTrigger == "unlock" && !homePaused) {
                         Log.d(TAG, "Celular desbloqueado: Cambiando fondo de INICIO.")
                         WallpaperHelper.changeWallpaper(this@WallpaperService, isLockScreen = false)
                     }

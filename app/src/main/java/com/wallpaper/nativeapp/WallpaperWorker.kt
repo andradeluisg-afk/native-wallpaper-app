@@ -25,7 +25,8 @@ class WallpaperWorker(
         // 1. Verificar Pantalla de Inicio
         val homeEnabled = prefs.getBoolean("home_enabled", false)
         val homeTrigger = prefs.getString("home_trigger", "time")
-        if (homeEnabled && homeTrigger == "time") {
+        val homePaused = prefs.getBoolean("home_paused", false)
+        if (homeEnabled && homeTrigger == "time" && !homePaused) {
             val homeIntervalMin = prefs.getInt("home_interval", 60) // por defecto 60 min
             val intervalMs = homeIntervalMin * 60 * 1000L
             val lastChange = prefs.getLong("home_last_change", 0L)
