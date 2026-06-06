@@ -89,6 +89,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var ivLockPreview: ImageView
     private lateinit var viewLockPreviewDim: View
 
+    // v0.3 Crop checkboxes
+    private lateinit var cbHomeCrop: android.widget.CheckBox
+    private lateinit var cbLockCrop: android.widget.CheckBox
+
     private lateinit var prefs: SharedPreferences
 
     // Spinner values
@@ -183,6 +187,10 @@ class MainActivity : AppCompatActivity() {
         ivLockPreview = findViewById(R.id.iv_lock_preview)
         viewLockPreviewDim = findViewById(R.id.view_lock_preview_dim)
 
+        // Crop checkboxes (v0.3)
+        cbHomeCrop = findViewById(R.id.cb_home_crop)
+        cbLockCrop = findViewById(R.id.cb_lock_crop)
+
         // Setup Spinners
         val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, intervalLabels)
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
@@ -242,16 +250,20 @@ class MainActivity : AppCompatActivity() {
             "stretch" -> {
                 rbHomeFitStretch.isChecked = true
                 ivHomePreview.scaleType = ImageView.ScaleType.FIT_XY
+                cbHomeCrop.visibility = View.GONE
             }
             "fit" -> {
                 rbHomeFitFit.isChecked = true
                 ivHomePreview.scaleType = ImageView.ScaleType.FIT_CENTER
+                cbHomeCrop.visibility = View.GONE
             }
             else -> {
                 rbHomeFitFill.isChecked = true
                 ivHomePreview.scaleType = ImageView.ScaleType.CENTER_CROP
+                cbHomeCrop.visibility = View.VISIBLE
             }
         }
+        cbHomeCrop.isChecked = prefs.getBoolean("home_crop", true)
 
         val homeBrightness = prefs.getInt("home_brightness", 100)
         sbHomeBrightness.progress = homeBrightness
@@ -286,16 +298,20 @@ class MainActivity : AppCompatActivity() {
             "stretch" -> {
                 rbLockFitStretch.isChecked = true
                 ivLockPreview.scaleType = ImageView.ScaleType.FIT_XY
+                cbLockCrop.visibility = View.GONE
             }
             "fit" -> {
                 rbLockFitFit.isChecked = true
                 ivLockPreview.scaleType = ImageView.ScaleType.FIT_CENTER
+                cbLockCrop.visibility = View.GONE
             }
             else -> {
                 rbLockFitFill.isChecked = true
                 ivLockPreview.scaleType = ImageView.ScaleType.CENTER_CROP
+                cbLockCrop.visibility = View.VISIBLE
             }
         }
+        cbLockCrop.isChecked = prefs.getBoolean("lock_crop", true)
 
         val lockBrightness = prefs.getInt("lock_brightness", 100)
         sbLockBrightness.progress = lockBrightness
@@ -385,6 +401,11 @@ class MainActivity : AppCompatActivity() {
                 "fit" -> ImageView.ScaleType.FIT_CENTER
                 else -> ImageView.ScaleType.CENTER_CROP
             }
+            // Show crop checkbox only in fill mode
+            cbHomeCrop.visibility = if (fit == "fill") View.VISIBLE else View.GONE
+        }
+        cbHomeCrop.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean("home_crop", isChecked).apply()
         }
         sbHomeBrightness.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -428,6 +449,11 @@ class MainActivity : AppCompatActivity() {
                 "fit" -> ImageView.ScaleType.FIT_CENTER
                 else -> ImageView.ScaleType.CENTER_CROP
             }
+            // Show crop checkbox only in fill mode
+            cbLockCrop.visibility = if (fit == "fill") View.VISIBLE else View.GONE
+        }
+        cbLockCrop.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean("lock_crop", isChecked).apply()
         }
         sbLockBrightness.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {

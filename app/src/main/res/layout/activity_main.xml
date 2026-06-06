@@ -348,6 +348,19 @@
                             android:textColor="@color/text_primary"
                             android:buttonTint="@color/primary" />
                     </RadioGroup>
+
+                    <!-- Checkbox: No recortar (para paralaje / desplazamiento lateral) -->
+                    <CheckBox
+                        android:id="@+id/cb_home_crop"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/crop_wallpaper"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp"
+                        android:buttonTint="@color/primary"
+                        android:checked="true"
+                        android:layout_marginTop="10dp"
+                        android:visibility="visible" />
                 </LinearLayout>
 
                 <!-- Tarjeta 4: Brillo -->
@@ -731,6 +744,19 @@
                             android:textColor="@color/text_primary"
                             android:buttonTint="@color/primary" />
                     </RadioGroup>
+
+                    <!-- Checkbox: No recortar (para paralaje / desplazamiento lateral) -->
+                    <CheckBox
+                        android:id="@+id/cb_lock_crop"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/crop_wallpaper"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp"
+                        android:buttonTint="@color/primary"
+                        android:checked="true"
+                        android:layout_marginTop="10dp"
+                        android:visibility="visible" />
                 </LinearLayout>
 
                 <!-- Tarjeta 4: Brillo -->

@@ -25,6 +25,7 @@
     <string name="fit_fill">Relleno (Cortar)</string>
     <string name="fit_stretch">Estirar</string>
     <string name="fit_fit">Ajustar (Zoom Out)</string>
+    <string name="crop_wallpaper">Recortar al ancho de pantalla (desactiva para desplazamiento paralaje)</string>
     
     <string name="lbl_brightness">Brillo de Imagen</string>
     <string name="lbl_order">Orden de Selección</string>

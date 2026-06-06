@@ -19,6 +19,7 @@ import kotlin.math.min
 object WallpaperHelper {
 
     private const val TAG = "WallpaperHelper"
+    private const val HISTORY_MAX_SIZE = 15
 
     /**
      * Obtiene la lista de URIs de imágenes dentro de una carpeta seleccionada por SAF
@@ -93,9 +94,48 @@ object WallpaperHelper {
         val totalImages = imageUris.size
 
         if (order == "random") {
-            val randomIndex = (0 until totalImages).random()
-            selectedUri = imageUris[randomIndex]
-            Log.d(TAG, "Modo aleatorio: seleccionada imagen index $randomIndex/$totalImages")
+            // ─── Opción B: Filtro de historial reciente ───────────────────────────
+            // Calculamos cuántas imágenes podemos recordar sin que se atasque
+            // (nunca más de la mitad del total para que siempre haya candidatos)
+            val historyCapacity = min(HISTORY_MAX_SIZE, totalImages / 2)
+
+            // Cargar historial guardado
+            val historyString = prefs.getString("${prefix}recent_history", "") ?: ""
+            val recentHistory = if (historyString.isBlank()) {
+                mutableListOf()
+            } else {
+                historyString.split(",").toMutableList()
+            }
+
+            // Intentar elegir una imagen que no esté en el historial (máx 30 intentos)
+            var attempts = 0
+            var candidate: Uri? = null
+            while (attempts < 30) {
+                val randomIndex = (0 until totalImages).random()
+                val candidateUri = imageUris[randomIndex]
+                if (historyCapacity <= 0 || !recentHistory.contains(candidateUri.toString())) {
+                    candidate = candidateUri
+                    break
+                }
+                attempts++
+            }
+            // Si tras 30 intentos no encontramos candidato (carpeta muy pequeña), elegimos al azar
+            if (candidate == null) {
+                candidate = imageUris[(0 until totalImages).random()]
+                Log.w(TAG, "Historial lleno y sin candidatos nuevos tras $attempts intentos. Eligiendo al azar.")
+            }
+            selectedUri = candidate
+
+            // Actualizar historial: agregar el nuevo y recortar a la capacidad
+            if (historyCapacity > 0) {
+                recentHistory.add(selectedUri.toString())
+                while (recentHistory.size > historyCapacity) {
+                    recentHistory.removeAt(0)
+                }
+                prefs.edit().putString("${prefix}recent_history", recentHistory.joinToString(",")).apply()
+            }
+
+            Log.d(TAG, "Modo aleatorio: seleccionada (intentos=$attempts) | historial=${recentHistory.size}/$historyCapacity | total=$totalImages")
         } else {
             // Modo secuencial
             var currentIndex = prefs.getInt("${prefix}current_index", 0)
@@ -103,7 +143,7 @@ object WallpaperHelper {
                 currentIndex = 0
             }
             selectedUri = imageUris[currentIndex]
-            
+
             // Avanzar al siguiente y guardar en cache
             val nextIndex = (currentIndex + 1) % totalImages
             prefs.edit().putInt("${prefix}current_index", nextIndex).apply()
@@ -115,23 +155,27 @@ object WallpaperHelper {
         // Configuración de estilo y atenuación
         val fitMode = prefs.getString("${prefix}fit_mode", "fill") ?: "fill"
         val brightness = prefs.getInt("${prefix}brightness", 100)
+        val crop = prefs.getBoolean("${prefix}crop", true)
 
         // Obtener tamaño de la pantalla
         val metrics = context.resources.displayMetrics
         val screenWidth = metrics.widthPixels
         val screenHeight = metrics.heightPixels
 
-        Log.d(TAG, "Procesando imagen: URI=$selectedUri | Pantalla=${screenWidth}x${screenHeight} | Fit=$fitMode | Brillo=$brightness%")
+        // Para modo relleno sin recorte cargamos a mayor resolución (imagen más ancha)
+        val reqWidth = if (fitMode == "fill" && !crop) screenWidth * 3 else screenWidth
+
+        Log.d(TAG, "Procesando imagen: URI=$selectedUri | Pantalla=${screenWidth}x${screenHeight} | Fit=$fitMode | Crop=$crop | Brillo=$brightness%")
 
         // Decodificar la imagen optimizada para el tamaño de la pantalla
-        val originalBitmap = decodeSampledBitmap(context, selectedUri, screenWidth, screenHeight)
+        val originalBitmap = decodeSampledBitmap(context, selectedUri, reqWidth, screenHeight)
         if (originalBitmap == null) {
             Log.e(TAG, "No se pudo decodificar la imagen: $selectedUri")
             return false
         }
 
         // Procesar la imagen (escalado y brillo)
-        val processedBitmap = processBitmap(originalBitmap, screenWidth, screenHeight, fitMode, brightness)
+        val processedBitmap = processBitmap(originalBitmap, screenWidth, screenHeight, fitMode, brightness, crop)
         originalBitmap.recycle() // Liberar memoria de la imagen decodificada original
 
         if (processedBitmap == null) {
@@ -208,24 +252,33 @@ object WallpaperHelper {
     }
 
     /**
-     * Escala y aplica el brillo al bitmap en un canvas para maximizar el rendimiento de memoria
+     * Escala y aplica el brillo al bitmap en un canvas para maximizar el rendimiento de memoria.
+     *
+     * @param crop  Si false y fitMode == "fill", NO se recorta el ancho de la imagen.
+     *              El bitmap resultante será más ancho que la pantalla, lo que permite
+     *              el efecto de desplazamiento paralaje en launchers como Lawnchair.
      */
-    fun processBitmap(original: Bitmap, screenWidth: Int, screenHeight: Int, fitMode: String, brightness: Int): Bitmap? {
+    fun processBitmap(
+        original: Bitmap,
+        screenWidth: Int,
+        screenHeight: Int,
+        fitMode: String,
+        brightness: Int,
+        crop: Boolean = true
+    ): Bitmap? {
         return try {
             val srcWidth = original.width
             val srcHeight = original.height
 
-            // Creamos un bitmap limpio con el tamaño exacto de la pantalla
-            val processed = Bitmap.createBitmap(screenWidth, screenHeight, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(processed)
-            canvas.drawColor(Color.BLACK) // Relleno por defecto (útil en modo Fit)
-
             when (fitMode) {
                 "stretch" -> {
                     // Estirar la imagen a pantalla completa sin importar la proporción
-                    val srcRect = Rect(0, 0, srcWidth, srcHeight)
-                    val destRect = Rect(0, 0, screenWidth, screenHeight)
-                    canvas.drawBitmap(original, srcRect, destRect, null)
+                    val processed = Bitmap.createBitmap(screenWidth, screenHeight, Bitmap.Config.ARGB_8888)
+                    val canvas = Canvas(processed)
+                    canvas.drawColor(Color.BLACK)
+                    canvas.drawBitmap(original, Rect(0, 0, srcWidth, srcHeight), Rect(0, 0, screenWidth, screenHeight), null)
+                    applyDim(canvas, screenWidth, screenHeight, brightness)
+                    processed
                 }
                 "fit" -> {
                     // Zoom Out: Ajustar la imagen completa dentro de la pantalla, manteniendo la proporción
@@ -238,42 +291,69 @@ object WallpaperHelper {
                     val left = (screenWidth - newWidth) / 2
                     val top = (screenHeight - newHeight) / 2
 
-                    val srcRect = Rect(0, 0, srcWidth, srcHeight)
-                    val destRect = Rect(left, top, left + newWidth, top + newHeight)
-                    canvas.drawBitmap(original, srcRect, destRect, null)
+                    val processed = Bitmap.createBitmap(screenWidth, screenHeight, Bitmap.Config.ARGB_8888)
+                    val canvas = Canvas(processed)
+                    canvas.drawColor(Color.BLACK)
+                    canvas.drawBitmap(original, Rect(0, 0, srcWidth, srcHeight), Rect(left, top, left + newWidth, top + newHeight), null)
+                    applyDim(canvas, screenWidth, screenHeight, brightness)
+                    processed
                 }
-                else -> { // "fill" (Rellena - Default)
-                    // Zoom In: Cubrir la pantalla completa, manteniendo la proporción (recortando los sobrantes)
-                    val scaleX = screenWidth.toFloat() / srcWidth
-                    val scaleY = screenHeight.toFloat() / srcHeight
-                    val scale = max(scaleX, scaleY)
+                else -> { // "fill"
+                    if (crop) {
+                        // ── Modo Relleno CON recorte (comportamiento original) ──
+                        // Escala la imagen para que cubra toda la pantalla, recortando sobrantes.
+                        val scaleX = screenWidth.toFloat() / srcWidth
+                        val scaleY = screenHeight.toFloat() / srcHeight
+                        val scale = max(scaleX, scaleY)
 
-                    val newWidth = (srcWidth * scale).toInt()
-                    val newHeight = (srcHeight * scale).toInt()
-                    val left = (screenWidth - newWidth) / 2
-                    val top = (screenHeight - newHeight) / 2
+                        val newWidth = (srcWidth * scale).toInt()
+                        val newHeight = (srcHeight * scale).toInt()
+                        val left = (screenWidth - newWidth) / 2
+                        val top = (screenHeight - newHeight) / 2
 
-                    val srcRect = Rect(0, 0, srcWidth, srcHeight)
-                    val destRect = Rect(left, top, left + newWidth, top + newHeight)
-                    canvas.drawBitmap(original, srcRect, destRect, null)
+                        val processed = Bitmap.createBitmap(screenWidth, screenHeight, Bitmap.Config.ARGB_8888)
+                        val canvas = Canvas(processed)
+                        canvas.drawColor(Color.BLACK)
+                        canvas.drawBitmap(original, Rect(0, 0, srcWidth, srcHeight), Rect(left, top, left + newWidth, top + newHeight), null)
+                        applyDim(canvas, screenWidth, screenHeight, brightness)
+                        processed
+                    } else {
+                        // ── Modo Relleno SIN recorte (paralaje / desplazamiento lateral) ──
+                        // La imagen se escala para que su ALTO coincida exactamente con la pantalla.
+                        // El ANCHO resultante se respeta sin recortar, dando una imagen más ancha
+                        // que el launcher puede desplazar lateralmente (efecto paralaje).
+                        val scale = screenHeight.toFloat() / srcHeight
+                        val newWidth = max(screenWidth, (srcWidth * scale).toInt())
+                        val newHeight = screenHeight  // siempre igual al alto de pantalla
+
+                        val processed = Bitmap.createBitmap(newWidth, newHeight, Bitmap.Config.ARGB_8888)
+                        val canvas = Canvas(processed)
+                        canvas.drawColor(Color.BLACK)
+                        // Dibujar desde la esquina superior-izquierda (sin centrar horizontalmente)
+                        canvas.drawBitmap(original, Rect(0, 0, srcWidth, srcHeight), Rect(0, 0, newWidth, newHeight), null)
+                        applyDim(canvas, newWidth, newHeight, brightness)
+                        processed
+                    }
                 }
             }
-
-            // Aplicar oscurecimiento de brillo si es menor a 100%
-            val dimAlpha = ((100 - brightness) * 255 / 100).coerceIn(0, 255)
-            if (dimAlpha > 0) {
-                val paint = Paint().apply {
-                    color = Color.BLACK
-                    alpha = dimAlpha
-                    style = Paint.Style.FILL
-                }
-                canvas.drawRect(0f, 0f, screenWidth.toFloat(), screenHeight.toFloat(), paint)
-            }
-
-            processed
         } catch (e: Exception) {
             Log.e(TAG, "Error en procesamiento de bitmap: ${e.message}", e)
             null
+        }
+    }
+
+    /**
+     * Aplica una capa de oscurecimiento proporcional al brillo configurado.
+     */
+    private fun applyDim(canvas: Canvas, width: Int, height: Int, brightness: Int) {
+        val dimAlpha = ((100 - brightness) * 255 / 100).coerceIn(0, 255)
+        if (dimAlpha > 0) {
+            val paint = Paint().apply {
+                color = Color.BLACK
+                alpha = dimAlpha
+                style = Paint.Style.FILL
+            }
+            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
         }
     }
 }
