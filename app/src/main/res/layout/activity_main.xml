@@ -230,6 +230,17 @@
                         android:textColor="@color/text_primary"
                         android:textSize="13sp"
                         android:textAllCaps="false" />
+
+                    <android.widget.Button
+                        android:id="@+id/btn_home_clear_blacklist"
+                        android:layout_width="match_parent"
+                        android:layout_height="44dp"
+                        android:background="@drawable/bg_card"
+                        android:text="Restablecer Lista Negra (0)"
+                        android:textColor="@color/secondary"
+                        android:textSize="13sp"
+                        android:layout_marginTop="8dp"
+                        android:textAllCaps="false" />
                 </LinearLayout>
 
                 <!-- Tarjeta 2: Disparador -->
@@ -399,6 +410,17 @@
                         android:thumbTint="@color/secondary"
                         android:progressTint="@color/secondary"
                         android:progressBackgroundTint="@color/card_border" />
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/switch_home_adaptive_brightness"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:text="Atenuación inteligente (según fondo)"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp"
+                        app:thumbTint="@color/secondary"
+                        app:trackTint="@color/card_border" />
                 </LinearLayout>
 
                 <!-- Tarjeta 5: Orden de Selección -->
@@ -626,6 +648,17 @@
                         android:textColor="@color/text_primary"
                         android:textSize="13sp"
                         android:textAllCaps="false" />
+
+                    <android.widget.Button
+                        android:id="@+id/btn_lock_clear_blacklist"
+                        android:layout_width="match_parent"
+                        android:layout_height="44dp"
+                        android:background="@drawable/bg_card"
+                        android:text="Restablecer Lista Negra (0)"
+                        android:textColor="@color/secondary"
+                        android:textSize="13sp"
+                        android:layout_marginTop="8dp"
+                        android:textAllCaps="false" />
                 </LinearLayout>
 
                 <!-- Tarjeta 2: Disparador -->
@@ -795,6 +828,17 @@
                         android:thumbTint="@color/secondary"
                         android:progressTint="@color/secondary"
                         android:progressBackgroundTint="@color/card_border" />
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/switch_lock_adaptive_brightness"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:text="Atenuación inteligente (según fondo)"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp"
+                        app:thumbTint="@color/secondary"
+                        app:trackTint="@color/card_border" />
                 </LinearLayout>
 
                 <!-- Tarjeta 5: Orden de Selección -->

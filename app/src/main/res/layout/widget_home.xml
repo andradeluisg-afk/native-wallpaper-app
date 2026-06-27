@@ -19,6 +19,18 @@
         android:contentDescription="Pausar o Reanudar"
         android:padding="8dp" />
 
+    <!-- Botón Lista Negra (Dedo Abajo) -->
+    <ImageButton
+        android:id="@+id/btn_widget_blacklist"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:src="@drawable/ic_widget_blacklist"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:scaleType="centerInside"
+        android:contentDescription="Eliminar y añadir a Lista Negra"
+        android:padding="8dp" />
+
     <!-- Botón Siguiente -->
     <ImageButton
         android:id="@+id/btn_widget_next"

@@ -20,6 +20,7 @@ class WallpaperWidgetLock : AppWidgetProvider() {
         private const val TAG = "WallpaperWidgetLock"
         const val ACTION_WIDGET_LOCK_TOGGLE_PAUSE = "com.wallpaper.nativeapp.ACTION_WIDGET_LOCK_TOGGLE_PAUSE"
         const val ACTION_WIDGET_LOCK_NEXT = "com.wallpaper.nativeapp.ACTION_WIDGET_LOCK_NEXT"
+        const val ACTION_WIDGET_LOCK_BLACKLIST = "com.wallpaper.nativeapp.ACTION_WIDGET_LOCK_BLACKLIST"
     }
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
@@ -55,6 +56,33 @@ class WallpaperWidgetLock : AppWidgetProvider() {
                 updateWidgetUi(context, appWidgetManager, id, newPaused)
             }
         } 
+        else if (action == ACTION_WIDGET_LOCK_BLACKLIST) {
+            Log.d(TAG, "Widget de Bloqueo solicitó añadir el fondo actual a la lista negra.")
+            val currentUri = prefs.getString("lock_current_uri", null)
+            if (!currentUri.isNullOrEmpty()) {
+                val blacklist = prefs.getStringSet("lock_blacklist", emptySet())?.toMutableSet() ?: mutableSetOf()
+                blacklist.add(currentUri)
+                prefs.edit().putStringSet("lock_blacklist", blacklist).apply()
+                Log.d(TAG, "Fondo de bloqueo añadido a la lista negra: $currentUri")
+                Toast.makeText(context, "Imagen eliminada y añadida a la lista negra", Toast.LENGTH_SHORT).show()
+            }
+            
+            val pendingResult = goAsync()
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val success = WallpaperHelper.changeWallpaper(context, isLockScreen = true)
+                    if (!success) {
+                        launch(Dispatchers.Main) {
+                            Toast.makeText(context, "No hay más imágenes disponibles.", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error al cambiar tras lista negra: ${e.message}")
+                } finally {
+                    pendingResult.finish()
+                }
+            }
+        }
         else if (action == ACTION_WIDGET_LOCK_NEXT) {
             Log.d(TAG, "Widget de Bloqueo solicitó cambiar a la siguiente imagen.")
             
@@ -102,6 +130,18 @@ class WallpaperWidgetLock : AppWidgetProvider() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         views.setOnClickPendingIntent(R.id.btn_widget_play_pause, pausePendingIntent)
+
+        // PendingIntent para Lista Negra (Dedo Abajo)
+        val blacklistIntent = Intent(context, WallpaperWidgetLock::class.java).apply {
+            action = ACTION_WIDGET_LOCK_BLACKLIST
+        }
+        val blacklistPendingIntent = PendingIntent.getBroadcast(
+            context,
+            appWidgetId + 50000, // Request code 50000 to keep it unique
+            blacklistIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        views.setOnClickPendingIntent(R.id.btn_widget_blacklist, blacklistPendingIntent)
 
         // PendingIntent para Siguiente
         val nextIntent = Intent(context, WallpaperWidgetLock::class.java).apply {

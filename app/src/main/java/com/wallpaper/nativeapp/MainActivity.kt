@@ -93,6 +93,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var cbHomeCrop: android.widget.CheckBox
     private lateinit var cbLockCrop: android.widget.CheckBox
 
+    // v0.4 Blacklist and Adaptive brightness views
+    private lateinit var btnHomeClearBlacklist: Button
+    private lateinit var switchHomeAdaptiveBrightness: SwitchCompat
+    private lateinit var btnLockClearBlacklist: Button
+    private lateinit var switchLockAdaptiveBrightness: SwitchCompat
+
+    private var homePreviewLuminance = 1.0f
+    private var lockPreviewLuminance = 1.0f
+
     private lateinit var prefs: SharedPreferences
 
     // Spinner values
@@ -190,6 +199,12 @@ class MainActivity : AppCompatActivity() {
         // Crop checkboxes (v0.3)
         cbHomeCrop = findViewById(R.id.cb_home_crop)
         cbLockCrop = findViewById(R.id.cb_lock_crop)
+
+        // v0.4 controls
+        btnHomeClearBlacklist = findViewById(R.id.btn_home_clear_blacklist)
+        switchHomeAdaptiveBrightness = findViewById(R.id.switch_home_adaptive_brightness)
+        btnLockClearBlacklist = findViewById(R.id.btn_lock_clear_blacklist)
+        switchLockAdaptiveBrightness = findViewById(R.id.switch_lock_adaptive_brightness)
 
         // Setup Spinners
         val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, intervalLabels)
@@ -319,6 +334,21 @@ class MainActivity : AppCompatActivity() {
 
         val lockOrder = prefs.getString("lock_order", "random")
         if (lockOrder == "random") rbLockOrderRandom.isChecked = true else rbLockOrderSequential.isChecked = true
+
+        // v0.4 cargar estados
+        switchHomeAdaptiveBrightness.isChecked = prefs.getBoolean("home_adaptive_dim", false)
+        switchLockAdaptiveBrightness.isChecked = prefs.getBoolean("lock_adaptive_dim", false)
+        updateBlacklistButtons()
+    }
+
+    private fun updateBlacklistButtons() {
+        val homeBlacklist = prefs.getStringSet("home_blacklist", emptySet()) ?: emptySet()
+        btnHomeClearBlacklist.text = "Restablecer Lista Negra (${homeBlacklist.size})"
+        btnHomeClearBlacklist.isEnabled = homeBlacklist.isNotEmpty()
+
+        val lockBlacklist = prefs.getStringSet("lock_blacklist", emptySet()) ?: emptySet()
+        btnLockClearBlacklist.text = "Restablecer Lista Negra (${lockBlacklist.size})"
+        btnLockClearBlacklist.isEnabled = lockBlacklist.isNotEmpty()
     }
 
     private fun setupListeners() {
@@ -344,6 +374,33 @@ class MainActivity : AppCompatActivity() {
             
             // Avisar al widget para que se redibuje inmediatamente
             notifyWidgetsOfPauseChange(isLockScreen = true)
+        }
+
+        // v0.4 Listeners
+        switchHomeAdaptiveBrightness.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean("home_adaptive_dim", isChecked).apply()
+            updateBrightnessText(sbHomeBrightness.progress, isLockScreen = false)
+        }
+
+        switchLockAdaptiveBrightness.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean("lock_adaptive_dim", isChecked).apply()
+            updateBrightnessText(sbLockBrightness.progress, isLockScreen = true)
+        }
+
+        btnHomeClearBlacklist.setOnClickListener {
+            prefs.edit().remove("home_blacklist").apply()
+            Toast.makeText(this, "Lista negra de inicio vaciada", Toast.LENGTH_SHORT).show()
+            updateBlacklistButtons()
+            val folder = prefs.getString("home_folder_uri", null)
+            updateFolderUI(folder, isLockScreen = false)
+        }
+
+        btnLockClearBlacklist.setOnClickListener {
+            prefs.edit().remove("lock_blacklist").apply()
+            Toast.makeText(this, "Lista negra de bloqueo vaciada", Toast.LENGTH_SHORT).show()
+            updateBlacklistButtons()
+            val folder = prefs.getString("lock_folder_uri", null)
+            updateFolderUI(folder, isLockScreen = true)
         }
 
         // Botón Cambiar fondo ahora
@@ -600,6 +657,15 @@ class MainActivity : AppCompatActivity() {
 
             if (bitmap != null) {
                 ivPreview.setImageBitmap(bitmap)
+                // v0.4 calcular luminancia de la miniatura para la vista previa
+                val luminance = WallpaperHelper.getAverageLuminance(bitmap)
+                if (isLockScreen) {
+                    lockPreviewLuminance = luminance
+                } else {
+                    homePreviewLuminance = luminance
+                }
+                val progress = if (isLockScreen) sbLockBrightness.progress else sbHomeBrightness.progress
+                updateBrightnessText(progress, isLockScreen)
             } else {
                 loadPlaceholderPreview(isLockScreen)
             }
@@ -610,21 +676,41 @@ class MainActivity : AppCompatActivity() {
         val ivPreview = if (isLockScreen) ivLockPreview else ivHomePreview
         ivPreview.setImageResource(android.R.drawable.ic_menu_gallery)
         ivPreview.scaleType = ImageView.ScaleType.FIT_CENTER
+        if (isLockScreen) {
+            lockPreviewLuminance = 1.0f
+        } else {
+            homePreviewLuminance = 1.0f
+        }
+        val progress = if (isLockScreen) sbLockBrightness.progress else sbHomeBrightness.progress
+        updateBrightnessText(progress, isLockScreen)
     }
 
     private fun updateBrightnessText(progress: Int, isLockScreen: Boolean) {
         val tvVal = if (isLockScreen) tvLockBrightnessVal else tvHomeBrightnessVal
         val viewDim = if (isLockScreen) viewLockPreviewDim else viewHomePreviewDim
+        val prefix = if (isLockScreen) "lock_" else "home_"
+        val adaptiveDim = prefs.getBoolean("${prefix}adaptive_dim", false)
+        val luminance = if (isLockScreen) lockPreviewLuminance else homePreviewLuminance
+        
+        val baseDimAlphaPercent = 100 - progress
+        val finalDimAlphaPercent = if (adaptiveDim) {
+            (baseDimAlphaPercent * luminance).toInt()
+        } else {
+            baseDimAlphaPercent
+        }
         
         if (progress == 100) {
             tvVal.text = "Brillo: 100% (Original)"
         } else {
-            tvVal.text = "Brillo: $progress% (Oscurecido ${100 - progress}%)"
+            if (adaptiveDim) {
+                tvVal.text = "Brillo: $progress% (Atenuación inteligente: -$finalDimAlphaPercent%)"
+            } else {
+                tvVal.text = "Brillo: $progress% (Oscurecido -$baseDimAlphaPercent%)"
+            }
         }
         
-        // El view de atenuación sobre la imagen de preview ajusta su alfa inversamente al progreso
-        val alpha = (100 - progress) / 100f
-        viewDim.alpha = alpha.coerceIn(0f, 0.9f) // no dejar que se ponga 100% negro en la preview para seguir apreciando la imagen
+        val alpha = finalDimAlphaPercent / 100f
+        viewDim.alpha = alpha.coerceIn(0f, 0.9f) // no dejar que se ponga 100% negro en la preview
     }
 
     private fun getFolderName(context: Context, uri: Uri): String {
@@ -731,6 +817,8 @@ class MainActivity : AppCompatActivity() {
             switchLockActive.isChecked = !lockPaused
             updateLockActiveTexts(!lockPaused)
         }
+        // v0.4 Actualizar contadores de lista negra
+        updateBlacklistButtons()
     }
 
     override fun onPause() {
