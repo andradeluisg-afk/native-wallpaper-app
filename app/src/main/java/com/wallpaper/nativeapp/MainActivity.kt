@@ -694,7 +694,8 @@ class MainActivity : AppCompatActivity() {
         
         val baseDimAlphaPercent = 100 - progress
         val finalDimAlphaPercent = if (adaptiveDim) {
-            (baseDimAlphaPercent * luminance).toInt()
+            val factor = ((luminance - 0.15f) / 0.65f).coerceIn(0f, 1f)
+            (baseDimAlphaPercent * factor).toInt()
         } else {
             baseDimAlphaPercent
         }

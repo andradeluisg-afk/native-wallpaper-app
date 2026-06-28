@@ -309,12 +309,20 @@ object WallpaperHelper {
             val srcHeight = original.height
 
             // Calcular el alpha base y aplicar opacidad adaptativa según la luminancia del fondo si está activa
+            // Mapeamos el rango de luminancia 0.15..0.80 al factor de opacidad 0.0..1.0
             val baseDimAlpha = ((100 - brightness) * 255 / 100).coerceIn(0, 255)
             val finalDimAlpha = if (adaptiveDim && baseDimAlpha > 0) {
                 val luminance = getAverageLuminance(original)
-                (baseDimAlpha * luminance).toInt().coerceIn(0, 255)
+                val factor = ((luminance - 0.15f) / 0.65f).coerceIn(0f, 1f)
+                (baseDimAlpha * factor).toInt().coerceIn(0, 255)
             } else {
                 baseDimAlpha
+            }
+
+            // Pintura con filtro bilineal y antialiasing para evitar la pixelación al escalar
+            val filterPaint = Paint().apply {
+                isFilterBitmap = true
+                isAntiAlias = true
             }
 
             when (fitMode) {
@@ -323,7 +331,7 @@ object WallpaperHelper {
                     val processed = Bitmap.createBitmap(screenWidth, screenHeight, Bitmap.Config.ARGB_8888)
                     val canvas = Canvas(processed)
                     canvas.drawColor(Color.BLACK)
-                    canvas.drawBitmap(original, Rect(0, 0, srcWidth, srcHeight), Rect(0, 0, screenWidth, screenHeight), null)
+                    canvas.drawBitmap(original, Rect(0, 0, srcWidth, srcHeight), Rect(0, 0, screenWidth, screenHeight), filterPaint)
                     applyDim(canvas, screenWidth, screenHeight, finalDimAlpha)
                     processed
                 }
@@ -341,7 +349,7 @@ object WallpaperHelper {
                     val processed = Bitmap.createBitmap(screenWidth, screenHeight, Bitmap.Config.ARGB_8888)
                     val canvas = Canvas(processed)
                     canvas.drawColor(Color.BLACK)
-                    canvas.drawBitmap(original, Rect(0, 0, srcWidth, srcHeight), Rect(left, top, left + newWidth, top + newHeight), null)
+                    canvas.drawBitmap(original, Rect(0, 0, srcWidth, srcHeight), Rect(left, top, left + newWidth, top + newHeight), filterPaint)
                     applyDim(canvas, screenWidth, screenHeight, finalDimAlpha)
                     processed
                 }
@@ -361,7 +369,7 @@ object WallpaperHelper {
                         val processed = Bitmap.createBitmap(screenWidth, screenHeight, Bitmap.Config.ARGB_8888)
                         val canvas = Canvas(processed)
                         canvas.drawColor(Color.BLACK)
-                        canvas.drawBitmap(original, Rect(0, 0, srcWidth, srcHeight), Rect(left, top, left + newWidth, top + newHeight), null)
+                        canvas.drawBitmap(original, Rect(0, 0, srcWidth, srcHeight), Rect(left, top, left + newWidth, top + newHeight), filterPaint)
                         applyDim(canvas, screenWidth, screenHeight, finalDimAlpha)
                         processed
                     } else {
@@ -370,14 +378,37 @@ object WallpaperHelper {
                         // El ANCHO resultante se respeta sin recortar, dando una imagen más ancha
                         // que el launcher puede desplazar lateralmente (efecto paralaje).
                         val scale = screenHeight.toFloat() / srcHeight
-                        val newWidth = max(screenWidth, (srcWidth * scale).toInt())
-                        val newHeight = screenHeight  // siempre igual al alto de pantalla
+                        val targetWidth = (srcWidth * scale).toInt()
+
+                        val newWidth: Int
+                        val newHeight: Int
+                        val srcRect: Rect
+                        val dstRect: Rect
+
+                        if (targetWidth < screenWidth) {
+                            // Si al escalar por alto la imagen queda más angosta que la pantalla,
+                            // no se puede desplazar. La escalamos por ancho y recortamos verticalmente
+                            // para evitar estiramientos horizontales que arruinen la proporcionalidad.
+                            val scaleW = screenWidth.toFloat() / srcWidth
+                            newWidth = screenWidth
+                            newHeight = screenHeight
+
+                            val cropHeight = (screenHeight / scaleW).toInt()
+                            val top = (srcHeight - cropHeight) / 2
+                            srcRect = Rect(0, top, srcWidth, top + cropHeight)
+                            dstRect = Rect(0, 0, screenWidth, screenHeight)
+                        } else {
+                            // Si es más ancha, escalamos por alto y respetamos el ancho extendido.
+                            newWidth = targetWidth
+                            newHeight = screenHeight
+                            srcRect = Rect(0, 0, srcWidth, srcHeight)
+                            dstRect = Rect(0, 0, newWidth, newHeight)
+                        }
 
                         val processed = Bitmap.createBitmap(newWidth, newHeight, Bitmap.Config.ARGB_8888)
                         val canvas = Canvas(processed)
                         canvas.drawColor(Color.BLACK)
-                        // Dibujar desde la esquina superior-izquierda (sin centrar horizontalmente)
-                        canvas.drawBitmap(original, Rect(0, 0, srcWidth, srcHeight), Rect(0, 0, newWidth, newHeight), null)
+                        canvas.drawBitmap(original, srcRect, dstRect, filterPaint)
                         applyDim(canvas, newWidth, newHeight, finalDimAlpha)
                         processed
                     }
