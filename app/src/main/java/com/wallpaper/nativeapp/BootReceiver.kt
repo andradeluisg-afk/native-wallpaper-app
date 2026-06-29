@@ -56,6 +56,9 @@ class BootReceiver : BroadcastReceiver() {
                     Log.e(TAG, "Error al iniciar WallpaperService: ${e.message}", e)
                 }
             }
+
+            // 3. Reprogramar el descargador automático de Wallhaven si está activo
+            WallpaperDownloader.rescheduleDownloader(context)
         }
     }
 }

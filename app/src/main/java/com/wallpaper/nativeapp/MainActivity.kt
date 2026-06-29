@@ -102,6 +102,23 @@ class MainActivity : AppCompatActivity() {
     private var homePreviewLuminance = 1.0f
     private var lockPreviewLuminance = 1.0f
 
+    // v0.4 Downloader views
+    private lateinit var tabDownloader: TextView
+    private lateinit var layoutDownloaderSettings: LinearLayout
+    private lateinit var switchDownloaderActive: SwitchCompat
+    private lateinit var tvDownloaderFolderStatus: TextView
+    private lateinit var btnDownloaderSelectFolder: Button
+    private lateinit var etDownloaderKeywords: EditText
+    private lateinit var etDownloaderInterval: EditText
+    private lateinit var rgDownloaderBatch: RadioGroup
+    private lateinit var rbDownloaderBatch1: RadioButton
+    private lateinit var rbDownloaderBatch2: RadioButton
+    private lateinit var rbDownloaderBatch3: RadioButton
+    private lateinit var rbDownloaderBatch4: RadioButton
+    private lateinit var btnDownloaderNow: Button
+
+    private val REQ_DOWNLOADER_FOLDER = 1003
+
     private lateinit var prefs: SharedPreferences
 
     // Spinner values
@@ -206,6 +223,21 @@ class MainActivity : AppCompatActivity() {
         btnLockClearBlacklist = findViewById(R.id.btn_lock_clear_blacklist)
         switchLockAdaptiveBrightness = findViewById(R.id.switch_lock_adaptive_brightness)
 
+        // v0.4 Downloader bindings
+        tabDownloader = findViewById(R.id.tab_downloader)
+        layoutDownloaderSettings = findViewById(R.id.layout_downloader_settings)
+        switchDownloaderActive = findViewById(R.id.switch_downloader_active)
+        tvDownloaderFolderStatus = findViewById(R.id.tv_downloader_folder_status)
+        btnDownloaderSelectFolder = findViewById(R.id.btn_downloader_select_folder)
+        etDownloaderKeywords = findViewById(R.id.et_downloader_keywords)
+        etDownloaderInterval = findViewById(R.id.et_downloader_interval)
+        rgDownloaderBatch = findViewById(R.id.rg_downloader_batch)
+        rbDownloaderBatch1 = findViewById(R.id.rb_downloader_batch_1)
+        rbDownloaderBatch2 = findViewById(R.id.rb_downloader_batch_2)
+        rbDownloaderBatch3 = findViewById(R.id.rb_downloader_batch_3)
+        rbDownloaderBatch4 = findViewById(R.id.rb_downloader_batch_4)
+        btnDownloaderNow = findViewById(R.id.btn_downloader_now)
+
         // Setup Spinners
         val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, intervalLabels)
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
@@ -219,9 +251,12 @@ class MainActivity : AppCompatActivity() {
             tabHome.setTextColor(resources.getColor(R.color.white, theme))
             tabLock.setBackgroundColor(resources.getColor(R.color.transparent, theme))
             tabLock.setTextColor(resources.getColor(R.color.text_secondary, theme))
+            tabDownloader.setBackgroundColor(resources.getColor(R.color.transparent, theme))
+            tabDownloader.setTextColor(resources.getColor(R.color.text_secondary, theme))
 
             layoutHomeSettings.visibility = View.VISIBLE
             layoutLockSettings.visibility = View.GONE
+            layoutDownloaderSettings.visibility = View.GONE
         }
 
         tabLock.setOnClickListener {
@@ -229,9 +264,25 @@ class MainActivity : AppCompatActivity() {
             tabLock.setTextColor(resources.getColor(R.color.white, theme))
             tabHome.setBackgroundColor(resources.getColor(R.color.transparent, theme))
             tabHome.setTextColor(resources.getColor(R.color.text_secondary, theme))
+            tabDownloader.setBackgroundColor(resources.getColor(R.color.transparent, theme))
+            tabDownloader.setTextColor(resources.getColor(R.color.text_secondary, theme))
 
             layoutHomeSettings.visibility = View.GONE
             layoutLockSettings.visibility = View.VISIBLE
+            layoutDownloaderSettings.visibility = View.GONE
+        }
+
+        tabDownloader.setOnClickListener {
+            tabDownloader.setBackgroundResource(R.drawable.bg_tab_active)
+            tabDownloader.setTextColor(resources.getColor(R.color.white, theme))
+            tabHome.setBackgroundColor(resources.getColor(R.color.transparent, theme))
+            tabHome.setTextColor(resources.getColor(R.color.text_secondary, theme))
+            tabLock.setBackgroundColor(resources.getColor(R.color.transparent, theme))
+            tabLock.setTextColor(resources.getColor(R.color.text_secondary, theme))
+
+            layoutHomeSettings.visibility = View.GONE
+            layoutLockSettings.visibility = View.GONE
+            layoutDownloaderSettings.visibility = View.VISIBLE
         }
     }
 
@@ -339,6 +390,33 @@ class MainActivity : AppCompatActivity() {
         switchHomeAdaptiveBrightness.isChecked = prefs.getBoolean("home_adaptive_dim", false)
         switchLockAdaptiveBrightness.isChecked = prefs.getBoolean("lock_adaptive_dim", false)
         updateBlacklistButtons()
+
+        // CONFIGURACIÓN AUTO-DESCARGADOR (v0.4)
+        val dlEnabled = prefs.getBoolean("downloader_enabled", false)
+        switchDownloaderActive.isChecked = dlEnabled
+
+        val dlFolder = prefs.getString("downloader_folder_uri", null)
+        if (dlFolder.isNullOrEmpty()) {
+            tvDownloaderFolderStatus.text = "Ninguna seleccionada (Se requiere)"
+        } else {
+            val uri = Uri.parse(dlFolder)
+            val name = getFolderName(this, uri)
+            tvDownloaderFolderStatus.text = "Carpeta: $name"
+        }
+
+        etDownloaderKeywords.setText(prefs.getString("downloader_keywords", ""))
+        
+        val dlInterval = prefs.getInt("downloader_interval_hours", 6)
+        etDownloaderInterval.setText(dlInterval.toString())
+
+        val dlBatch = prefs.getInt("downloader_batch_size", 1)
+        val batchRadioId = when (dlBatch) {
+            2 -> R.id.rb_downloader_batch_2
+            3 -> R.id.rb_downloader_batch_3
+            4 -> R.id.rb_downloader_batch_4
+            else -> R.id.rb_downloader_batch_1
+        }
+        rgDownloaderBatch.check(batchRadioId)
     }
 
     private fun updateBlacklistButtons() {
@@ -406,26 +484,87 @@ class MainActivity : AppCompatActivity() {
         // Botón Cambiar fondo ahora
         btnChangeNow.setOnClickListener {
             btnChangeNow.isEnabled = false
-            btnChangeNow.text = "Cambiando..."
-            
             activityScope.launch {
-                val homeSuccess = withContext(Dispatchers.IO) {
+                val successHome = withContext(Dispatchers.IO) {
                     WallpaperHelper.changeWallpaper(this@MainActivity, isLockScreen = false)
                 }
-                val lockSuccess = withContext(Dispatchers.IO) {
+                val successLock = withContext(Dispatchers.IO) {
                     WallpaperHelper.changeWallpaper(this@MainActivity, isLockScreen = true)
                 }
-
                 btnChangeNow.isEnabled = true
-                btnChangeNow.text = getString(R.string.btn_change_now)
-
-                if (homeSuccess || lockSuccess) {
-                    Toast.makeText(this@MainActivity, "Fondos actualizados correctamente", Toast.LENGTH_SHORT).show()
-                    // Recargar previsualización para reflejar cambio si es secuencial
+                if (successHome || successLock) {
+                    Toast.makeText(this@MainActivity, "Fondos cambiados con éxito", Toast.LENGTH_SHORT).show()
                     loadPreviewForScreen(isLockScreen = false)
                     loadPreviewForScreen(isLockScreen = true)
                 } else {
-                    Toast.makeText(this@MainActivity, "No se pudo cambiar el fondo. Asegúrate de configurar carpetas válidas.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@MainActivity, "Error al cambiar fondos. Verifica las carpetas.", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        // LISTENERS DEL AUTO-DESCARGADOR
+        switchDownloaderActive.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean("downloader_enabled", isChecked).apply()
+            WallpaperDownloader.rescheduleDownloader(this)
+        }
+
+        btnDownloaderSelectFolder.setOnClickListener {
+            selectFolder(REQ_DOWNLOADER_FOLDER)
+        }
+
+        etDownloaderKeywords.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                prefs.edit().putString("downloader_keywords", s?.toString() ?: "").apply()
+            }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
+
+        etDownloaderInterval.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                val hours = s?.toString()?.toIntOrNull() ?: 6
+                prefs.edit().putInt("downloader_interval_hours", hours.coerceAtLeast(1)).apply()
+                WallpaperDownloader.rescheduleDownloader(this@MainActivity)
+            }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
+
+        rgDownloaderBatch.setOnCheckedChangeListener { _, checkedId ->
+            val size = when (checkedId) {
+                R.id.rb_downloader_batch_2 -> 2
+                R.id.rb_downloader_batch_3 -> 3
+                R.id.rb_downloader_batch_4 -> 4
+                else -> 1
+            }
+            prefs.edit().putInt("downloader_batch_size", size).apply()
+        }
+
+        btnDownloaderNow.setOnClickListener {
+            val folder = prefs.getString("downloader_folder_uri", null)
+            if (folder.isNullOrEmpty()) {
+                Toast.makeText(this, "Selecciona una carpeta primero", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            btnDownloaderNow.isEnabled = false
+            btnDownloaderNow.text = "Descargando..."
+
+            activityScope.launch {
+                val downloaded = withContext(Dispatchers.IO) {
+                    WallpaperDownloader.doDownloadBatch(this@MainActivity, force = true)
+                }
+                btnDownloaderNow.isEnabled = true
+                btnDownloaderNow.text = "Descargar Ahora"
+                if (downloaded > 0) {
+                    Toast.makeText(this@MainActivity, "¡Listo! Se descargaron $downloaded imágenes.", Toast.LENGTH_SHORT).show()
+                    
+                    // Actualizar previsualización y conteo
+                    val homeFolder = prefs.getString("home_folder_uri", null)
+                    updateFolderUI(homeFolder, isLockScreen = false)
+                    val lockFolder = prefs.getString("lock_folder_uri", null)
+                    updateFolderUI(lockFolder, isLockScreen = true)
+                } else {
+                    Toast.makeText(this@MainActivity, "No se pudo descargar ninguna imagen. Revisa tu conexión o palabras clave.", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -539,51 +678,77 @@ class MainActivity : AppCompatActivity() {
         if (resultCode == Activity.RESULT_OK && data != null) {
             val treeUri = data.data ?: return
             
-            // Tomar permisos persistentes de lectura
-            val takeFlags = data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION
-            contentResolver.takePersistableUriPermission(treeUri, takeFlags)
-
-            val uriString = treeUri.toString()
-            val isLock = (requestCode == REQ_LOCK_FOLDER)
-            val prefix = if (isLock) "lock_" else "home_"
-
-            prefs.edit().apply {
-                putString("${prefix}folder_uri", uriString)
-                putBoolean("${prefix}enabled", true)
-                putInt("${prefix}current_index", 0) // reset index
-                apply()
+            // Tomar permisos persistentes de lectura y escritura
+            val takeFlags = data.flags and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            try {
+                contentResolver.takePersistableUriPermission(treeUri, takeFlags)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error solicitando permisos persistentes: ${e.message}")
             }
 
-            updateFolderUI(uriString, isLock)
-            rescheduleJobs()
+            val uriString = treeUri.toString()
+
+            if (requestCode == REQ_DOWNLOADER_FOLDER) {
+                prefs.edit().putString("downloader_folder_uri", uriString).apply()
+                val folderName = getFolderName(this, treeUri)
+                tvDownloaderFolderStatus.text = "Carpeta: $folderName"
+                
+                // Actualizar los textos de carpeta ya que las imágenes de descargas se combinan
+                val homeFolder = prefs.getString("home_folder_uri", null)
+                updateFolderUI(homeFolder, isLockScreen = false)
+                val lockFolder = prefs.getString("lock_folder_uri", null)
+                updateFolderUI(lockFolder, isLockScreen = true)
+            } else {
+                val isLock = (requestCode == REQ_LOCK_FOLDER)
+                val prefix = if (isLock) "lock_" else "home_"
+
+                prefs.edit().apply {
+                    putString("${prefix}folder_uri", uriString)
+                    putBoolean("${prefix}enabled", true)
+                    putInt("${prefix}current_index", 0) // reset index
+                    apply()
+                }
+
+                updateFolderUI(uriString, isLock)
+                rescheduleJobs()
+            }
         }
     }
 
     private fun updateFolderUI(uriString: String?, isLockScreen: Boolean) {
         val tvStatus = if (isLockScreen) tvLockFolderStatus else tvHomeFolderStatus
         val tvCount = if (isLockScreen) tvLockImageCount else tvHomeImageCount
+        val prefix = if (isLockScreen) "lock_" else "home_"
         
         if (uriString.isNullOrEmpty()) {
             tvStatus.text = getString(R.string.no_folder_selected)
-            tvCount.text = "0 imágenes encontradas"
-            loadPlaceholderPreview(isLockScreen)
-            return
+        } else {
+            val uri = Uri.parse(uriString)
+            val folderName = getFolderName(this, uri)
+            tvStatus.text = "Carpeta: $folderName"
         }
-
-        val uri = Uri.parse(uriString)
-        val folderName = getFolderName(this, uri)
-        tvStatus.text = "Carpeta: $folderName"
 
         // Escanear imágenes en segundo plano para no colgar la UI
         activityScope.launch {
             val images = withContext(Dispatchers.IO) {
-                WallpaperHelper.getImagesFromFolder(this@MainActivity, uriString)
+                WallpaperHelper.getCombinedImagesForScreen(this@MainActivity, isLockScreen)
             }
-            tvCount.text = "${images.size} imágenes encontradas"
             
-            if (images.isNotEmpty()) {
-                // Cargar la primera imagen del folder en la vista previa
-                loadPreviewImage(images[0], isLockScreen)
+            // Filtrar lista negra en la preview y en el contador
+            val blacklist = prefs.getStringSet("${prefix}blacklist", emptySet()) ?: emptySet()
+            val filteredImages = images.filter { !blacklist.contains(it.toString()) }
+            
+            tvCount.text = "${filteredImages.size} imágenes encontradas"
+            
+            if (filteredImages.isNotEmpty()) {
+                val order = prefs.getString("${prefix}order", "random") ?: "random"
+                val index = if (order == "sequential") {
+                    val currentIndex = prefs.getInt("${prefix}current_index", 0)
+                    if (currentIndex < filteredImages.size) currentIndex else 0
+                } else {
+                    0
+                }
+                loadPreviewImage(filteredImages[index], isLockScreen)
             } else {
                 loadPlaceholderPreview(isLockScreen)
             }
@@ -593,29 +758,7 @@ class MainActivity : AppCompatActivity() {
     private fun loadPreviewForScreen(isLockScreen: Boolean) {
         val prefix = if (isLockScreen) "lock_" else "home_"
         val folderUri = prefs.getString("${prefix}folder_uri", null)
-        
-        if (folderUri.isNullOrEmpty()) {
-            loadPlaceholderPreview(isLockScreen)
-            return
-        }
-
-        activityScope.launch {
-            val images = withContext(Dispatchers.IO) {
-                WallpaperHelper.getImagesFromFolder(this@MainActivity, folderUri)
-            }
-            if (images.isNotEmpty()) {
-                val order = prefs.getString("${prefix}order", "random") ?: "random"
-                val index = if (order == "sequential") {
-                    val currentIndex = prefs.getInt("${prefix}current_index", 0)
-                    if (currentIndex < images.size) currentIndex else 0
-                } else {
-                    0
-                }
-                loadPreviewImage(images[index], isLockScreen)
-            } else {
-                loadPlaceholderPreview(isLockScreen)
-            }
-        }
+        updateFolderUI(folderUri, isLockScreen)
     }
 
     private fun loadPreviewImage(uri: Uri, isLockScreen: Boolean) {

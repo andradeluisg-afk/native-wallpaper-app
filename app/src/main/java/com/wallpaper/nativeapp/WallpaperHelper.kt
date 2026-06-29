@@ -64,6 +64,27 @@ object WallpaperHelper {
     }
 
     /**
+     * Retorna la lista combinada de imágenes de la carpeta principal configurada
+     * y la carpeta de descargas automáticas (si está definida y es diferente).
+     */
+    fun getCombinedImagesForScreen(context: Context, isLockScreen: Boolean): List<Uri> {
+        val prefs = context.getSharedPreferences("wallpaper_prefs", Context.MODE_PRIVATE)
+        val prefix = if (isLockScreen) "lock_" else "home_"
+        
+        val mainFolder = prefs.getString("${prefix}folder_uri", null)
+        val downloadFolder = prefs.getString("downloader_folder_uri", null)
+        
+        val list = mutableListOf<Uri>()
+        if (!mainFolder.isNullOrEmpty()) {
+            list.addAll(getImagesFromFolder(context, mainFolder))
+        }
+        if (!downloadFolder.isNullOrEmpty() && downloadFolder != mainFolder) {
+            list.addAll(getImagesFromFolder(context, downloadFolder))
+        }
+        return list
+    }
+
+    /**
      * Cambia el fondo de pantalla (inicio o bloqueo) usando las preferencias del usuario
      */
     fun changeWallpaper(context: Context, isLockScreen: Boolean): Boolean {
@@ -76,16 +97,10 @@ object WallpaperHelper {
             return false
         }
 
-        val folderUriString = prefs.getString("${prefix}folder_uri", null)
-        if (folderUriString.isNullOrEmpty()) {
-            Log.w(TAG, "No hay carpeta configurada para pantalla de " + if (isLockScreen) "bloqueo" else "inicio")
-            return false
-        }
-
-        // Obtener todas las imágenes en esa carpeta
-        val imageUris = getImagesFromFolder(context, folderUriString)
+        // Obtener todas las imágenes combinando la carpeta principal y la de descargas automáticas
+        val imageUris = getCombinedImagesForScreen(context, isLockScreen)
         if (imageUris.isEmpty()) {
-            Log.w(TAG, "No se encontraron imágenes en la carpeta para " + if (isLockScreen) "bloqueo" else "inicio")
+            Log.w(TAG, "No se encontraron imágenes en las carpetas para " + if (isLockScreen) "bloqueo" else "inicio")
             return false
         }
 

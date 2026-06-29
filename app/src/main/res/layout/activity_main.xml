@@ -88,7 +88,7 @@
             android:elevation="4dp"
             android:layout_marginBottom="24dp" />
 
-        <!-- Control de Pestañas (Inicio vs Bloqueo) -->
+        <!-- Control de Pestañas (Inicio vs Bloqueo vs Descargas) -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="48dp"
@@ -105,7 +105,7 @@
                 android:gravity="center"
                 android:text="@string/tab_home"
                 android:textColor="@color/white"
-                android:textSize="14sp"
+                android:textSize="13sp"
                 android:textStyle="bold"
                 android:background="@drawable/bg_tab_active"
                 android:clickable="true"
@@ -119,7 +119,21 @@
                 android:gravity="center"
                 android:text="@string/tab_lock"
                 android:textColor="@color/text_secondary"
-                android:textSize="14sp"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:background="@color/transparent"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <TextView
+                android:id="@+id/tab_downloader"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="Descargas"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp"
                 android:textStyle="bold"
                 android:background="@color/transparent"
                 android:clickable="true"
@@ -979,6 +993,281 @@
                             </FrameLayout>
                         </androidx.cardview.widget.CardView>
                     </FrameLayout>
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- CONFIGURACIÓN AUTO DESCARGADOR -->
+            <LinearLayout
+                android:id="@+id/layout_downloader_settings"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <!-- Tarjeta: Estado del Auto-Descargador -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:background="@drawable/bg_card"
+                    android:padding="16dp"
+                    android:gravity="center_vertical"
+                    android:layout_marginBottom="16dp">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:layout_marginEnd="12dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Auto-Descargador (Wallhaven)"
+                            android:textColor="@color/text_primary"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Descarga fotos automáticamente en segundo plano"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="12sp"
+                            android:layout_marginTop="2dp" />
+                    </LinearLayout>
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/switch_downloader_active"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        app:thumbTint="@color/secondary"
+                        app:trackTint="@color/card_border" />
+                </LinearLayout>
+
+                <!-- Tarjeta: Carpeta de Destino -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="@drawable/bg_card"
+                    android:padding="16dp"
+                    android:layout_marginBottom="16dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Carpeta de Destino"
+                        android:textColor="@color/text_primary"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tv_downloader_folder_status"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Ninguna seleccionada (Se requiere)"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp"
+                        android:layout_marginTop="4dp"
+                        android:layout_marginBottom="12dp" />
+
+                    <android.widget.Button
+                        android:id="@+id/btn_downloader_select_folder"
+                        android:layout_width="match_parent"
+                        android:layout_height="44dp"
+                        android:background="@drawable/bg_card"
+                        android:text="Seleccionar Carpeta"
+                        android:textColor="@color/text_primary"
+                        android:textSize="13sp"
+                        android:textAllCaps="false" />
+                </LinearLayout>
+
+                <!-- Tarjeta: Palabras Clave -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="@drawable/bg_card"
+                    android:padding="16dp"
+                    android:layout_marginBottom="16dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Palabras Clave (Separadas por comas)"
+                        android:textColor="@color/text_primary"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Ejemplo: Dragon Ball, Dune, Chainsaw Man, HOD"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp"
+                        android:layout_marginTop="2dp"
+                        android:layout_marginBottom="12dp" />
+
+                    <EditText
+                        android:id="@+id/et_downloader_keywords"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="Palabras clave..."
+                        android:textColor="@color/text_primary"
+                        android:textColorHint="@color/text_secondary"
+                        android:textSize="14sp"
+                        android:backgroundTint="@color/card_border"
+                        android:inputType="textAutoCorrect|textCapWords"
+                        android:maxLines="3" />
+                </LinearLayout>
+
+                <!-- Tarjeta: Frecuencia y Cantidad -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="@drawable/bg_card"
+                    android:padding="16dp"
+                    android:layout_marginBottom="16dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Frecuencia y Cantidad"
+                        android:textColor="@color/text_primary"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <!-- Frecuencia de Descarga -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:layout_marginTop="12dp"
+                        android:layout_marginBottom="16dp">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Descargar cada (horas):"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="13sp" />
+
+                        <EditText
+                            android:id="@+id/et_downloader_interval"
+                            android:layout_width="60dp"
+                            android:layout_height="wrap_content"
+                            android:gravity="center"
+                            android:inputType="number"
+                            android:text="6"
+                            android:textColor="@color/text_primary"
+                            android:textSize="14sp"
+                            android:backgroundTint="@color/card_border" />
+                    </LinearLayout>
+
+                    <!-- Cantidad de Imágenes por Tanda -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Imágenes a descargar por vez:"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp"
+                        android:layout_marginBottom="8dp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center"
+                        android:background="@drawable/bg_tabs_container"
+                        android:padding="4dp">
+
+                        <RadioGroup
+                            android:id="@+id/rg_downloader_batch"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal">
+
+                            <RadioButton
+                                android:id="@+id/rb_downloader_batch_1"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="1"
+                                android:textColor="@color/text_primary"
+                                android:buttonTint="@color/primary"
+                                android:checked="true" />
+
+                            <RadioButton
+                                android:id="@+id/rb_downloader_batch_2"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="2"
+                                android:textColor="@color/text_primary"
+                                android:buttonTint="@color/primary" />
+
+                            <RadioButton
+                                android:id="@+id/rb_downloader_batch_3"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="3"
+                                android:textColor="@color/text_primary"
+                                android:buttonTint="@color/primary" />
+
+                            <RadioButton
+                                android:id="@+id/rb_downloader_batch_4"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="4"
+                                android:textColor="@color/text_primary"
+                                android:buttonTint="@color/primary" />
+                        </RadioGroup>
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- Tarjeta: Descargar Ahora -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="@drawable/bg_card"
+                    android:padding="16dp"
+                    android:layout_marginBottom="24dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Prueba Manual"
+                        android:textColor="@color/text_primary"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Fuerza una descarga de prueba inmediatamente"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp"
+                        android:layout_marginTop="2dp"
+                        android:layout_marginBottom="12dp" />
+
+                    <android.widget.Button
+                        android:id="@+id/btn_downloader_now"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:background="@drawable/bg_button_gradient"
+                        android:text="Descargar Ahora"
+                        android:textColor="@color/white"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:textAllCaps="false" />
                 </LinearLayout>
             </LinearLayout>
         </FrameLayout>
