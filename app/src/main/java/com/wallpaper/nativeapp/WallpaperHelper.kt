@@ -270,20 +270,31 @@ object WallpaperHelper {
      *              el efecto de desplazamiento paralaje en launchers como Lawnchair.
      */
     /**
-     * Calcula la luminancia (brillo) promedio de un bitmap de forma ultra rápida
-     * escalándolo a 1x1 píxel. Retorna un valor entre 0.0 (negro) y 1.0 (blanco).
+     * Calcula la luminancia (brillo) de la región más clara de la imagen.
+     * Escala el bitmap a un grid de 4x4 y toma el valor máximo de luminancia
+     * para asegurar que fondos de alto contraste (ej: mitad blanco, mitad negro)
+     * se atenuen correctamente en sus zonas claras, protegiendo la lectura de los widgets.
      */
     fun getAverageLuminance(bitmap: Bitmap): Float {
         return try {
-            val scaled = Bitmap.createScaledBitmap(bitmap, 1, 1, true)
-            val color = scaled.getPixel(0, 0)
+            val scaled = Bitmap.createScaledBitmap(bitmap, 4, 4, true)
+            var maxLuminance = 0f
+            for (x in 0 until 4) {
+                for (y in 0 until 4) {
+                    val color = scaled.getPixel(x, y)
+                    val r = (color shr 16) and 0xFF
+                    val g = (color shr 8) and 0xFF
+                    val b = color and 0xFF
+                    val luminance = (0.299f * r + 0.587f * g + 0.114f * b) / 255f
+                    if (luminance > maxLuminance) {
+                        maxLuminance = luminance
+                    }
+                }
+            }
             scaled.recycle()
-            val r = (color shr 16) and 0xFF
-            val g = (color shr 8) and 0xFF
-            val b = color and 0xFF
-            (0.299f * r + 0.587f * g + 0.114f * b) / 255f
+            maxLuminance
         } catch (e: Exception) {
-            Log.e(TAG, "Error calculando luminancia promedio: ${e.message}", e)
+            Log.e(TAG, "Error calculando luminancia máxima regional: ${e.message}", e)
             0.5f // valor neutral por defecto
         }
     }
@@ -385,6 +396,8 @@ object WallpaperHelper {
                         val srcRect: Rect
                         val dstRect: Rect
 
+                        val maxScrollWidth = (screenWidth * 2.5f).toInt() // Límite máximo para evitar que imágenes panorámicas se vean gigantes
+
                         if (targetWidth < screenWidth) {
                             // Si al escalar por alto la imagen queda más angosta que la pantalla,
                             // no se puede desplazar. La escalamos por ancho y recortamos verticalmente
@@ -397,8 +410,18 @@ object WallpaperHelper {
                             val top = (srcHeight - cropHeight) / 2
                             srcRect = Rect(0, top, srcWidth, top + cropHeight)
                             dstRect = Rect(0, 0, screenWidth, screenHeight)
+                        } else if (targetWidth > maxScrollWidth) {
+                            // Si la imagen es extremadamente ancha (panorámica), limitamos el ancho máximo
+                            // para que no se renderice gigante ni borrosa, recortando los laterales.
+                            newWidth = maxScrollWidth
+                            newHeight = screenHeight
+
+                            val cropWidth = (srcHeight.toFloat() * maxScrollWidth / screenHeight).toInt()
+                            val left = (srcWidth - cropWidth) / 2
+                            srcRect = Rect(left, 0, left + cropWidth, srcHeight)
+                            dstRect = Rect(0, 0, newWidth, newHeight)
                         } else {
-                            // Si es más ancha, escalamos por alto y respetamos el ancho extendido.
+                            // Si es más ancha que la pantalla pero está dentro del límite, escalamos por alto.
                             newWidth = targetWidth
                             newHeight = screenHeight
                             srcRect = Rect(0, 0, srcWidth, srcHeight)
