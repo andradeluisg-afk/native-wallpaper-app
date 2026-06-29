@@ -235,6 +235,14 @@
                         android:layout_marginTop="4dp"
                         android:layout_marginBottom="12dp" />
 
+                    <LinearLayout
+                        android:id="@+id/layout_home_folders_list"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:layout_marginTop="4dp"
+                        android:layout_marginBottom="8dp" />
+
                     <android.widget.Button
                         android:id="@+id/btn_home_select_folder"
                         android:layout_width="match_parent"
@@ -652,6 +660,14 @@
                         android:textSize="12sp"
                         android:layout_marginTop="4dp"
                         android:layout_marginBottom="12dp" />
+
+                    <LinearLayout
+                        android:id="@+id/layout_lock_folders_list"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:layout_marginTop="4dp"
+                        android:layout_marginBottom="8dp" />
 
                     <android.widget.Button
                         android:id="@+id/btn_lock_select_folder"

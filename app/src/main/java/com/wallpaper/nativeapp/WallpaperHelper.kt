@@ -19,7 +19,7 @@ import kotlin.math.min
 object WallpaperHelper {
 
     private const val TAG = "WallpaperHelper"
-    private const val HISTORY_MAX_SIZE = 15
+    private const val HISTORY_MAX_SIZE = 30
 
     /**
      * Obtiene la lista de URIs de imágenes dentro de una carpeta seleccionada por SAF
@@ -64,22 +64,40 @@ object WallpaperHelper {
     }
 
     /**
-     * Retorna la lista combinada de imágenes de la carpeta principal configurada
-     * y la carpeta de descargas automáticas (si está definida y es diferente).
+     * Retorna la lista de carpetas configuradas para esta pantalla (incluyendo la de descargas).
      */
-    fun getCombinedImagesForScreen(context: Context, isLockScreen: Boolean): List<Uri> {
+    fun getConfiguredFoldersForScreen(context: Context, isLockScreen: Boolean): List<String> {
         val prefs = context.getSharedPreferences("wallpaper_prefs", Context.MODE_PRIVATE)
         val prefix = if (isLockScreen) "lock_" else "home_"
         
-        val mainFolder = prefs.getString("${prefix}folder_uri", null)
-        val downloadFolder = prefs.getString("downloader_folder_uri", null)
+        val delimitedStr = prefs.getString("${prefix}folder_uris_delimited", null)
+        val folders = delimitedStr?.split("|")?.filter { it.isNotEmpty() }?.toMutableList() ?: mutableListOf()
         
-        val list = mutableListOf<Uri>()
-        if (!mainFolder.isNullOrEmpty()) {
-            list.addAll(getImagesFromFolder(context, mainFolder))
+        // Si no hay ninguna múltiple pero hay una clásica, la usamos (migración / compatibilidad)
+        if (folders.isEmpty()) {
+            val classic = prefs.getString("${prefix}folder_uri", null)
+            if (!classic.isNullOrEmpty()) {
+                folders.add(classic)
+            }
         }
-        if (!downloadFolder.isNullOrEmpty() && downloadFolder != mainFolder) {
-            list.addAll(getImagesFromFolder(context, downloadFolder))
+        
+        // Agregar la carpeta de descargas automáticas si está configurada y no está ya en la lista
+        val downloadFolder = prefs.getString("downloader_folder_uri", null)
+        if (!downloadFolder.isNullOrEmpty() && !folders.contains(downloadFolder)) {
+            folders.add(downloadFolder)
+        }
+        return folders
+    }
+
+    /**
+     * Retorna la lista combinada de imágenes de todas las carpetas configuradas
+     * para esta pantalla, más la carpeta de descargas automáticas (si está definida).
+     */
+    fun getCombinedImagesForScreen(context: Context, isLockScreen: Boolean): List<Uri> {
+        val folders = getConfiguredFoldersForScreen(context, isLockScreen)
+        val list = mutableListOf<Uri>()
+        for (folderUriStr in folders) {
+            list.addAll(getImagesFromFolder(context, folderUriStr))
         }
         return list
     }
@@ -97,83 +115,95 @@ object WallpaperHelper {
             return false
         }
 
-        // Obtener todas las imágenes combinando la carpeta principal y la de descargas automáticas
-        val imageUris = getCombinedImagesForScreen(context, isLockScreen)
-        if (imageUris.isEmpty()) {
-            Log.w(TAG, "No se encontraron imágenes en las carpetas para " + if (isLockScreen) "bloqueo" else "inicio")
-            return false
-        }
-
         // Filtrar lista negra
         val blacklist = prefs.getStringSet("${prefix}blacklist", emptySet()) ?: emptySet()
-        val filteredImageUris = imageUris.filter { !blacklist.contains(it.toString()) }
-        if (filteredImageUris.isEmpty()) {
-            Log.w(TAG, "No se encontraron imágenes (todas están en lista negra) en la carpeta para " + if (isLockScreen) "bloqueo" else "inicio")
-            return false
-        }
-
         val order = prefs.getString("${prefix}order", "random") ?: "random"
         var selectedUri: Uri? = null
-        val totalImages = filteredImageUris.size
 
         if (order == "random") {
-            // ─── Opción B: Filtro de historial reciente ───────────────────────────
-            // Calculamos cuántas imágenes podemos recordar sin que se atasque
-            // (nunca más de la mitad del total para que siempre haya candidatos)
-            val historyCapacity = min(HISTORY_MAX_SIZE, totalImages / 2)
-
-            // Cargar historial guardado
-            val historyString = prefs.getString("${prefix}recent_history", "") ?: ""
-            val recentHistory = if (historyString.isBlank()) {
-                mutableListOf()
-            } else {
-                historyString.split(",").toMutableList()
+            val folders = getConfiguredFoldersForScreen(context, isLockScreen)
+            if (folders.isEmpty()) {
+                Log.w(TAG, "No hay carpetas configuradas para pantalla de " + if (isLockScreen) "bloqueo" else "inicio")
+                return false
             }
 
-            // Intentar elegir una imagen que no esté en el historial (máx 30 intentos)
-            var attempts = 0
-            var candidate: Uri? = null
-            while (attempts < 30) {
-                val randomIndex = (0 until totalImages).random()
-                val candidateUri = filteredImageUris[randomIndex]
-                if (historyCapacity <= 0 || !recentHistory.contains(candidateUri.toString())) {
-                    candidate = candidateUri
-                    break
+            // Seleccionar primero una carpeta al azar (para evitar sesgo de tamaño)
+            val shuffledFolders = folders.shuffled()
+            for (chosenFolder in shuffledFolders) {
+                val folderImages = getImagesFromFolder(context, chosenFolder)
+                if (folderImages.isEmpty()) continue
+
+                val filteredFolderImages = folderImages.filter { !blacklist.contains(it.toString()) }
+                if (filteredFolderImages.isEmpty()) continue
+
+                val totalInFolder = filteredFolderImages.size
+                val historyCapacity = min(HISTORY_MAX_SIZE, totalInFolder / 2)
+
+                // Cargar historial guardado
+                val historyString = prefs.getString("${prefix}recent_history", "") ?: ""
+                val recentHistory = if (historyString.isBlank()) {
+                    mutableListOf()
+                } else {
+                    historyString.split(",").filter { it.isNotEmpty() }.toMutableList()
                 }
-                attempts++
-            }
-            // Si tras 30 intentos no encontramos candidato (carpeta muy pequeña), elegimos al azar
-            if (candidate == null) {
-                candidate = filteredImageUris[(0 until totalImages).random()]
-                Log.w(TAG, "Historial lleno y sin candidatos nuevos tras $attempts intentos. Eligiendo al azar.")
-            }
-            selectedUri = candidate
 
-            // Actualizar historial: agregar el nuevo y recortar a la capacidad
-            if (historyCapacity > 0) {
+                // Intentar elegir una imagen que no esté en la última sección del historial de esta carpeta (máx 30 intentos)
+                var attempts = 0
+                var candidate: Uri? = null
+                while (attempts < 30) {
+                    val randomIndex = (0 until totalInFolder).random()
+                    val candidateUri = filteredFolderImages[randomIndex]
+                    
+                    // Solo comparamos contra las últimas 'historyCapacity' imágenes del historial
+                    val recentSlice = recentHistory.takeLast(historyCapacity)
+                    if (historyCapacity <= 0 || !recentSlice.contains(candidateUri.toString())) {
+                        candidate = candidateUri
+                        break
+                    }
+                    attempts++
+                }
+
+                // Si tras 30 intentos no encontramos candidato (carpeta pequeña ya recorrida), elegimos al azar de esta carpeta
+                if (candidate == null) {
+                    candidate = filteredFolderImages[(0 until totalInFolder).random()]
+                    Log.d(TAG, "Carpeta pequeña sin candidatos no recientes tras 30 intentos. Eligiendo al azar de $chosenFolder.")
+                }
+
+                selectedUri = candidate
+
+                // Actualizar historial global: agregar el nuevo y recortar al tamaño máximo
                 recentHistory.add(selectedUri.toString())
-                while (recentHistory.size > historyCapacity) {
+                while (recentHistory.size > HISTORY_MAX_SIZE) {
                     recentHistory.removeAt(0)
                 }
                 prefs.edit().putString("${prefix}recent_history", recentHistory.joinToString(",")).apply()
-            }
 
-            Log.d(TAG, "Modo aleatorio: seleccionada (intentos=$attempts) | historial=${recentHistory.size}/$historyCapacity | total=$totalImages")
+                Log.d(TAG, "Modo aleatorio sesgado por carpetas: seleccionada de $chosenFolder | historial global=${recentHistory.size}/$HISTORY_MAX_SIZE | total en carpeta=$totalInFolder")
+                break // Detenemos la búsqueda de carpetas porque ya elegimos una imagen
+            }
         } else {
-            // Modo secuencial
-            var currentIndex = prefs.getInt("${prefix}current_index", 0)
-            if (currentIndex >= totalImages) {
-                currentIndex = 0
-            }
-            selectedUri = filteredImageUris[currentIndex]
+            // Modo secuencial: mezclamos todas las imágenes de todas las carpetas y recorremos en orden
+            val imageUris = getCombinedImagesForScreen(context, isLockScreen)
+            val filteredImageUris = imageUris.filter { !blacklist.contains(it.toString()) }
+            if (filteredImageUris.isNotEmpty()) {
+                val totalImages = filteredImageUris.size
+                var currentIndex = prefs.getInt("${prefix}current_index", 0)
+                if (currentIndex >= totalImages) {
+                    currentIndex = 0
+                }
+                selectedUri = filteredImageUris[currentIndex]
 
-            // Avanzar al siguiente y guardar en cache
-            val nextIndex = (currentIndex + 1) % totalImages
-            prefs.edit().putInt("${prefix}current_index", nextIndex).apply()
-            Log.d(TAG, "Modo secuencial: index $currentIndex/$totalImages. Siguiente: $nextIndex")
+                // Avanzar al siguiente y guardar en cache
+                val nextIndex = (currentIndex + 1) % totalImages
+                prefs.edit().putInt("${prefix}current_index", nextIndex).apply()
+                Log.d(TAG, "Modo secuencial: index $currentIndex/$totalImages. Siguiente: $nextIndex")
+            }
         }
 
-        if (selectedUri == null) return false
+        if (selectedUri == null) {
+            Log.w(TAG, "No se pudo seleccionar ninguna imagen válida para la pantalla de " + if (isLockScreen) "bloqueo" else "inicio")
+            return false
+        }
 
         // Configuración de estilo y atenuación
         val fitMode = prefs.getString("${prefix}fit_mode", "fill") ?: "fill"

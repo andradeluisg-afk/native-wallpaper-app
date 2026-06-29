@@ -76,6 +76,7 @@ object WallpaperDownloader {
     }
 
     private fun downloadOneImage(context: Context, query: String, folderUri: Uri): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         try {
             // Consulta Wallhaven con sorting=random para tener variedad en cada llamada
             val urlString = "https://wallhaven.cc/api/v1/search?q=${Uri.encode(query)}&categories=111&purity=100&sorting=random"
@@ -88,16 +89,40 @@ object WallpaperDownloader {
                 return false
             }
             
-            // Tomamos el primer resultado devuelto (al ser sorting=random, ya es aleatorio)
-            val item = dataArray.getJSONObject(0)
-            val imageUrl = item.getString("path")
+            // Cargar historial de IDs descargados para evitar repetidos
+            val downloadedIds = prefs.getStringSet("downloader_downloaded_ids", emptySet())?.toMutableSet() ?: mutableSetOf()
             
-            // Generar nombre de archivo amigable
+            // Buscar la primera imagen del listado que no haya sido descargada antes
+            var selectedItem: JSONObject? = null
+            for (j in 0 until dataArray.length()) {
+                val item = dataArray.getJSONObject(j)
+                val id = item.getString("id")
+                if (!downloadedIds.contains(id)) {
+                    selectedItem = item
+                    break
+                }
+            }
+            
+            if (selectedItem == null) {
+                Log.d(TAG, "Todas las imágenes de esta página de resultados para '$query' ya fueron descargadas.")
+                return false
+            }
+            
+            val id = selectedItem.getString("id")
+            val imageUrl = selectedItem.getString("path")
+            
+            // Generar nombre de archivo amigable usando el ID de Wallhaven para evitar colisiones
             val safeQueryName = query.replace("[^a-zA-Z0-9]".toRegex(), "_")
-            val fileName = "wallhaven_${safeQueryName}_${System.currentTimeMillis()}"
+            val fileName = "wallhaven_${safeQueryName}_${id}"
             
-            Log.d(TAG, "Encontrada imagen para '$query': $imageUrl. Descargando...")
-            return downloadImageToDocument(context, imageUrl, folderUri, fileName)
+            Log.d(TAG, "Encontrada imagen no repetida para '$query' (ID=$id): $imageUrl. Descargando...")
+            val success = downloadImageToDocument(context, imageUrl, folderUri, fileName)
+            if (success) {
+                // Registrar el ID en el historial para evitar repetidos en el futuro
+                downloadedIds.add(id)
+                prefs.edit().putStringSet("downloader_downloaded_ids", downloadedIds).apply()
+            }
+            return success
         } catch (e: Exception) {
             Log.e(TAG, "Error descargando imagen para query '$query': ${e.message}", e)
             return false

@@ -37,6 +37,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tabLock: TextView
     private lateinit var layoutHomeSettings: LinearLayout
     private lateinit var layoutLockSettings: LinearLayout
+    private lateinit var layoutHomeFoldersList: LinearLayout
+    private lateinit var layoutLockFoldersList: LinearLayout
 
     // v0.3 Pause/Active state
     private lateinit var switchHomeActive: SwitchCompat
@@ -222,6 +224,8 @@ class MainActivity : AppCompatActivity() {
         switchHomeAdaptiveBrightness = findViewById(R.id.switch_home_adaptive_brightness)
         btnLockClearBlacklist = findViewById(R.id.btn_lock_clear_blacklist)
         switchLockAdaptiveBrightness = findViewById(R.id.switch_lock_adaptive_brightness)
+        layoutHomeFoldersList = findViewById(R.id.layout_home_folders_list)
+        layoutLockFoldersList = findViewById(R.id.layout_lock_folders_list)
 
         // v0.4 Downloader bindings
         tabDownloader = findViewById(R.id.tab_downloader)
@@ -290,12 +294,23 @@ class MainActivity : AppCompatActivity() {
         // Cargar servicio global
         switchService.isChecked = prefs.getBoolean("service_active", false)
 
+        // Migración de carpeta única a múltiple (v0.5)
+        for (prefix in listOf("home_", "lock_")) {
+            val classic = prefs.getString("${prefix}folder_uri", null)
+            val delimited = prefs.getString("${prefix}folder_uris_delimited", null)
+            if (delimited == null && !classic.isNullOrEmpty()) {
+                saveFolderUris(prefix, listOf(classic))
+            }
+        }
+
         // CONFIGURACIÓN PANTALLA INICIO (v0.3 pausa/play)
         val homePaused = prefs.getBoolean("home_paused", false)
         switchHomeActive.isChecked = !homePaused
         updateHomeActiveTexts(!homePaused)
 
-        val homeFolder = prefs.getString("home_folder_uri", null)
+        updateFoldersListUI(isLock = false)
+        val homeUris = getFolderUris("home_")
+        val homeFolder = if (homeUris.isNotEmpty()) homeUris[0] else null
         updateFolderUI(homeFolder, isLockScreen = false)
 
         val homeTrigger = prefs.getString("home_trigger", "time")
@@ -343,7 +358,9 @@ class MainActivity : AppCompatActivity() {
         switchLockActive.isChecked = !lockPaused
         updateLockActiveTexts(!lockPaused)
 
-        val lockFolder = prefs.getString("lock_folder_uri", null)
+        updateFoldersListUI(isLock = true)
+        val lockUris = getFolderUris("lock_")
+        val lockFolder = if (lockUris.isNotEmpty()) lockUris[0] else null
         updateFolderUI(lockFolder, isLockScreen = true)
 
         val lockTrigger = prefs.getString("lock_trigger", "time")
@@ -429,6 +446,81 @@ class MainActivity : AppCompatActivity() {
         btnLockClearBlacklist.isEnabled = lockBlacklist.isNotEmpty()
     }
 
+    private fun getFolderUris(prefix: String): List<String> {
+        val str = prefs.getString("${prefix}folder_uris_delimited", null) ?: return emptyList()
+        return str.split("|").filter { it.isNotEmpty() }
+    }
+
+    private fun saveFolderUris(prefix: String, list: List<String>) {
+        val str = list.joinToString("|")
+        prefs.edit().putString("${prefix}folder_uris_delimited", str).apply()
+    }
+
+    private fun updateFoldersListUI(isLock: Boolean) {
+        val prefix = if (isLock) "lock_" else "home_"
+        val layoutList = if (isLock) layoutLockFoldersList else layoutHomeFoldersList
+        val tvStatus = if (isLock) tvLockFolderStatus else tvHomeFolderStatus
+        val btnSelect = if (isLock) btnLockSelectFolder else btnHomeSelectFolder
+
+        layoutList.removeAllViews()
+
+        val uris = getFolderUris(prefix).toMutableList()
+
+        if (uris.isEmpty()) {
+            tvStatus.visibility = View.VISIBLE
+            tvStatus.text = getString(R.string.no_folder_selected)
+            layoutList.visibility = View.GONE
+        } else {
+            tvStatus.visibility = View.GONE
+            layoutList.visibility = View.VISIBLE
+
+            for (uriStr in uris) {
+                val row = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply {
+                        setMargins(0, 0, 0, 8)
+                    }
+                    gravity = android.view.Gravity.CENTER_VERTICAL
+                }
+
+                val tvName = TextView(this).apply {
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                    text = getFolderName(this@MainActivity, Uri.parse(uriStr))
+                    setTextColor(resources.getColor(R.color.text_primary, theme))
+                    textSize = 13sp
+                }
+
+                val btnDelete = TextView(this).apply {
+                    text = "Quitar"
+                    setTextColor(resources.getColor(R.color.secondary, theme))
+                    textSize = 12sp
+                    setPadding(12, 6, 12, 6)
+                    isClickable = true
+                    isFocusable = true
+                    setBackgroundResource(R.drawable.bg_card)
+
+                    setOnClickListener {
+                        uris.remove(uriStr)
+                        saveFolderUris(prefix, uris)
+                        updateFoldersListUI(isLock)
+                        updateFolderUI(null, isLock)
+                        rescheduleJobs()
+                    }
+                }
+
+                row.addView(tvName)
+                row.addView(btnDelete)
+                layoutList.addView(row)
+            }
+        }
+
+        btnSelect.text = "Agregar Carpeta (${uris.size}/4)"
+        btnSelect.isEnabled = uris.size < 4
+    }
+
     private fun setupListeners() {
         // Toggle de Servicio en segundo plano
         switchService.setOnCheckedChangeListener { _, isChecked ->
@@ -469,16 +561,18 @@ class MainActivity : AppCompatActivity() {
             prefs.edit().remove("home_blacklist").apply()
             Toast.makeText(this, "Lista negra de inicio vaciada", Toast.LENGTH_SHORT).show()
             updateBlacklistButtons()
-            val folder = prefs.getString("home_folder_uri", null)
-            updateFolderUI(folder, isLockScreen = false)
+            val homeUris = getFolderUris("home_")
+            val homeFolder = if (homeUris.isNotEmpty()) homeUris[0] else null
+            updateFolderUI(homeFolder, isLockScreen = false)
         }
 
         btnLockClearBlacklist.setOnClickListener {
             prefs.edit().remove("lock_blacklist").apply()
             Toast.makeText(this, "Lista negra de bloqueo vaciada", Toast.LENGTH_SHORT).show()
             updateBlacklistButtons()
-            val folder = prefs.getString("lock_folder_uri", null)
-            updateFolderUI(folder, isLockScreen = true)
+            val lockUris = getFolderUris("lock_")
+            val lockFolder = if (lockUris.isNotEmpty()) lockUris[0] else null
+            updateFolderUI(lockFolder, isLockScreen = true)
         }
 
         // Botón Cambiar fondo ahora
@@ -694,23 +788,33 @@ class MainActivity : AppCompatActivity() {
                 tvDownloaderFolderStatus.text = "Carpeta: $folderName"
                 
                 // Actualizar los textos de carpeta ya que las imágenes de descargas se combinan
-                val homeFolder = prefs.getString("home_folder_uri", null)
+                val homeUris = getFolderUris("home_")
+                val homeFolder = if (homeUris.isNotEmpty()) homeUris[0] else null
                 updateFolderUI(homeFolder, isLockScreen = false)
-                val lockFolder = prefs.getString("lock_folder_uri", null)
+                
+                val lockUris = getFolderUris("lock_")
+                val lockFolder = if (lockUris.isNotEmpty()) lockUris[0] else null
                 updateFolderUI(lockFolder, isLockScreen = true)
             } else {
                 val isLock = (requestCode == REQ_LOCK_FOLDER)
                 val prefix = if (isLock) "lock_" else "home_"
 
-                prefs.edit().apply {
-                    putString("${prefix}folder_uri", uriString)
-                    putBoolean("${prefix}enabled", true)
-                    putInt("${prefix}current_index", 0) // reset index
-                    apply()
-                }
+                val uris = getFolderUris(prefix).toMutableList()
+                if (!uris.contains(uriString) && uris.size < 4) {
+                    uris.add(uriString)
+                    saveFolderUris(prefix, uris)
+                    
+                    // Asegurar de habilitar la rotación
+                    prefs.edit().apply {
+                        putBoolean("${prefix}enabled", true)
+                        putInt("${prefix}current_index", 0) // reset index
+                        apply()
+                    }
 
-                updateFolderUI(uriString, isLock)
-                rescheduleJobs()
+                    updateFoldersListUI(isLock)
+                    updateFolderUI(null, isLock)
+                    rescheduleJobs()
+                }
             }
         }
     }
