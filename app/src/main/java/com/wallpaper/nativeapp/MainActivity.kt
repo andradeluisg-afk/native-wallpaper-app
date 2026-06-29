@@ -490,13 +490,13 @@ class MainActivity : AppCompatActivity() {
                     layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
                     text = getFolderName(this@MainActivity, Uri.parse(uriStr))
                     setTextColor(resources.getColor(R.color.text_primary, theme))
-                    textSize = 13sp
+                    textSize = 13f
                 }
 
                 val btnDelete = TextView(this).apply {
                     text = "Quitar"
                     setTextColor(resources.getColor(R.color.secondary, theme))
-                    textSize = 12sp
+                    textSize = 12f
                     setPadding(12, 6, 12, 6)
                     isClickable = true
                     isFocusable = true
