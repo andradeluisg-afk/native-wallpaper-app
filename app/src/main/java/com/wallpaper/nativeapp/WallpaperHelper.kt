@@ -80,12 +80,6 @@ object WallpaperHelper {
                 folders.add(classic)
             }
         }
-        
-        // Agregar la carpeta de descargas automáticas si está configurada y no está ya en la lista
-        val downloadFolder = prefs.getString("downloader_folder_uri", null)
-        if (!downloadFolder.isNullOrEmpty() && !folders.contains(downloadFolder)) {
-            folders.add(downloadFolder)
-        }
         return folders
     }
 

@@ -78,8 +78,8 @@ object WallpaperDownloader {
     private fun downloadOneImage(context: Context, query: String, folderUri: Uri): Boolean {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         try {
-            // Consulta Wallhaven con sorting=random para tener variedad en cada llamada
-            val urlString = "https://wallhaven.cc/api/v1/search?q=${Uri.encode(query)}&categories=111&purity=100&sorting=random"
+            // Consulta Wallhaven con sorting=random, limitando a formato vertical y alta resolución
+            val urlString = "https://wallhaven.cc/api/v1/search?q=${Uri.encode(query)}&categories=111&purity=100&sorting=random&ratios=9x16,10x16,9x18&atleast=1080x1920"
             val response = fetchUrl(urlString) ?: return false
             
             val json = JSONObject(response)
