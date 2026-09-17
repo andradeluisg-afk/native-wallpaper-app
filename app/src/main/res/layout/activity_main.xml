@@ -486,6 +486,18 @@
                             android:textColor="@color/text_primary"
                             android:buttonTint="@color/primary" />
                     </RadioGroup>
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/switch_home_prioritize_recent"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:text="Priorizar imágenes recientes"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp"
+                        app:thumbTint="@color/secondary"
+                        app:trackTint="@color/card_border"
+                        android:checked="true" />
                 </LinearLayout>
 
                 <!-- Tarjeta 6: Mock Phone Live Preview -->
@@ -912,6 +924,18 @@
                             android:textColor="@color/text_primary"
                             android:buttonTint="@color/primary" />
                     </RadioGroup>
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/switch_lock_prioritize_recent"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:text="Priorizar imágenes recientes"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp"
+                        app:thumbTint="@color/secondary"
+                        app:trackTint="@color/card_border"
+                        android:checked="true" />
                 </LinearLayout>
 
                 <!-- Tarjeta 6: Mock Phone Live Preview -->

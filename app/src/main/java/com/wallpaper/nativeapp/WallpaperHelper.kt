@@ -21,12 +21,17 @@ object WallpaperHelper {
     private const val TAG = "WallpaperHelper"
     private const val HISTORY_MAX_SIZE = 30
 
+    data class ImageMetadata(
+        val uri: Uri,
+        val lastModified: Long
+    )
+
     /**
-     * Obtiene la lista de URIs de imágenes dentro de una carpeta seleccionada por SAF
+     * Obtiene la lista de imágenes con metadatos de fecha dentro de una carpeta seleccionada por SAF
      */
-    fun getImagesFromFolder(context: Context, folderUriString: String?): List<Uri> {
+    fun getImagesWithMetadataFromFolder(context: Context, folderUriString: String?): List<ImageMetadata> {
         if (folderUriString.isNullOrEmpty()) return emptyList()
-        val list = mutableListOf<Uri>()
+        val list = mutableListOf<ImageMetadata>()
         try {
             val treeUri = Uri.parse(folderUriString)
             val documentId = if (DocumentsContract.isDocumentUri(context, treeUri)) {
@@ -38,29 +43,38 @@ object WallpaperHelper {
 
             val projection = arrayOf(
                 DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-                DocumentsContract.Document.COLUMN_MIME_TYPE
+                DocumentsContract.Document.COLUMN_MIME_TYPE,
+                DocumentsContract.Document.COLUMN_LAST_MODIFIED
             )
 
             context.contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
                 val idIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
                 val mimeIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_MIME_TYPE)
+                val modIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
 
                 while (cursor.moveToNext()) {
                     if (idIndex >= 0 && mimeIndex >= 0) {
                         val docId = cursor.getString(idIndex)
                         val mimeType = cursor.getString(mimeIndex)
-                        // Filtrar solo imágenes (png, jpg, webp, etc.)
                         if (mimeType != null && mimeType.startsWith("image/")) {
+                            val lastMod = if (modIndex >= 0 && !cursor.isNull(modIndex)) cursor.getLong(modIndex) else 0L
                             val fileUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
-                            list.add(fileUri)
+                            list.add(ImageMetadata(fileUri, lastMod))
                         }
                     }
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error escaneando carpeta: ${e.message}", e)
+            Log.e(TAG, "Error escaneando carpeta con metadatos: ${e.message}", e)
         }
         return list
+    }
+
+    /**
+     * Obtiene la lista de URIs de imágenes dentro de una carpeta seleccionada por SAF
+     */
+    fun getImagesFromFolder(context: Context, folderUriString: String?): List<Uri> {
+        return getImagesWithMetadataFromFolder(context, folderUriString).map { it.uri }
     }
 
     /**
@@ -109,9 +123,9 @@ object WallpaperHelper {
             return false
         }
 
-        // Filtrar lista negra
         val blacklist = prefs.getStringSet("${prefix}blacklist", emptySet()) ?: emptySet()
         val order = prefs.getString("${prefix}order", "random") ?: "random"
+        val prioritizeRecent = prefs.getBoolean("${prefix}prioritize_recent", true)
         var selectedUri: Uri? = null
 
         if (order == "random") {
@@ -121,60 +135,112 @@ object WallpaperHelper {
                 return false
             }
 
-            // Seleccionar primero una carpeta al azar (para evitar sesgo de tamaño)
-            val shuffledFolders = folders.shuffled()
-            for (chosenFolder in shuffledFolders) {
-                val folderImages = getImagesFromFolder(context, chosenFolder)
+            // Cargar historial reciente de imágenes mostradas
+            val historyString = prefs.getString("${prefix}recent_history", "") ?: ""
+            var recentHistory = if (historyString.isBlank()) {
+                mutableListOf()
+            } else {
+                historyString.split(",").filter { it.isNotEmpty() }.toMutableList()
+            }
+
+            // Recopilar candidatos de todas las carpetas
+            val candidateItems = mutableListOf<Pair<ImageMetadata, Double>>()
+            var totalNonBlacklistedCount = 0
+
+            for (chosenFolder in folders) {
+                val folderImages = getImagesWithMetadataFromFolder(context, chosenFolder)
                 if (folderImages.isEmpty()) continue
 
-                val filteredFolderImages = folderImages.filter { !blacklist.contains(it.toString()) }
+                val filteredFolderImages = folderImages.filter { !blacklist.contains(it.uri.toString()) }
                 if (filteredFolderImages.isEmpty()) continue
 
-                val totalInFolder = filteredFolderImages.size
-                val historyCapacity = min(HISTORY_MAX_SIZE, totalInFolder / 2)
+                totalNonBlacklistedCount += filteredFolderImages.size
 
-                // Cargar historial guardado
-                val historyString = prefs.getString("${prefix}recent_history", "") ?: ""
-                val recentHistory = if (historyString.isBlank()) {
-                    mutableListOf()
+                // Filtrar imágenes que están en el historial de no-repetición
+                val eligibleFolderImages = filteredFolderImages.filter { !recentHistory.contains(it.uri.toString()) }
+                if (eligibleFolderImages.isEmpty()) continue
+
+                // Ordenar por recencia dentro de esta carpeta (más nuevas primero)
+                val sortedEligible = if (prioritizeRecent) {
+                    eligibleFolderImages.sortedByDescending { it.lastModified }
                 } else {
-                    historyString.split(",").filter { it.isNotEmpty() }.toMutableList()
+                    eligibleFolderImages
                 }
 
-                // Intentar elegir una imagen que no esté en la última sección del historial de esta carpeta (máx 30 intentos)
-                var attempts = 0
-                var candidate: Uri? = null
-                while (attempts < 30) {
-                    val randomIndex = (0 until totalInFolder).random()
-                    val candidateUri = filteredFolderImages[randomIndex]
-                    
-                    // Solo comparamos contra las últimas 'historyCapacity' imágenes del historial
-                    val recentSlice = recentHistory.takeLast(historyCapacity)
-                    if (historyCapacity <= 0 || !recentSlice.contains(candidateUri.toString())) {
-                        candidate = candidateUri
-                        break
+                // Asignar peso de recencia por rango r en la carpeta: W(r) = 1.0 / (r + 1)^1.5
+                for (r in sortedEligible.indices) {
+                    val weight = if (prioritizeRecent) {
+                        1.0 / Math.pow((r + 1).toDouble(), 1.5)
+                    } else {
+                        1.0
                     }
-                    attempts++
+                    candidateItems.add(Pair(sortedEligible[r], weight))
                 }
-
-                // Si tras 30 intentos no encontramos candidato (carpeta pequeña ya recorrida), elegimos al azar de esta carpeta
-                if (candidate == null) {
-                    candidate = filteredFolderImages[(0 until totalInFolder).random()]
-                    Log.d(TAG, "Carpeta pequeña sin candidatos no recientes tras 30 intentos. Eligiendo al azar de $chosenFolder.")
-                }
-
-                selectedUri = candidate
-
-                // Actualizar historial global: agregar el nuevo y recortar al tamaño máximo
-                recentHistory.add(selectedUri.toString())
-                while (recentHistory.size > HISTORY_MAX_SIZE) {
-                    recentHistory.removeAt(0)
-                }
-                prefs.edit().putString("${prefix}recent_history", recentHistory.joinToString(",")).apply()
-
-                Log.d(TAG, "Modo aleatorio sesgado por carpetas: seleccionada de $chosenFolder | historial global=${recentHistory.size}/$HISTORY_MAX_SIZE | total en carpeta=$totalInFolder")
-                break // Detenemos la búsqueda de carpetas porque ya elegimos una imagen
             }
+
+            // Si se agotaron los candidatos porque TODAS las imágenes están en el historial:
+            if (candidateItems.isEmpty() && totalNonBlacklistedCount > 0) {
+                Log.d(TAG, "Todas las $totalNonBlacklistedCount imágenes han sido mostradas. Reiniciando ciclo de historial.")
+                recentHistory.clear()
+                prefs.edit().remove("${prefix}recent_history").apply()
+
+                for (chosenFolder in folders) {
+                    val folderImages = getImagesWithMetadataFromFolder(context, chosenFolder)
+                    val filteredFolderImages = folderImages.filter { !blacklist.contains(it.uri.toString()) }
+                    if (filteredFolderImages.isEmpty()) continue
+
+                    val sortedEligible = if (prioritizeRecent) {
+                        filteredFolderImages.sortedByDescending { it.lastModified }
+                    } else {
+                        filteredFolderImages
+                    }
+
+                    for (r in sortedEligible.indices) {
+                        val weight = if (prioritizeRecent) {
+                            1.0 / Math.pow((r + 1).toDouble(), 1.5)
+                        } else {
+                            1.0
+                        }
+                        candidateItems.add(Pair(sortedEligible[r], weight))
+                    }
+                }
+            }
+
+            if (candidateItems.isEmpty()) {
+                Log.w(TAG, "No hay imágenes disponibles para seleccionar en " + if (isLockScreen) "bloqueo" else "inicio")
+                return false
+            }
+
+            // Selección Aleatoria Ponderada (Weighted Random Sampling)
+            val totalWeight = candidateItems.sumOf { it.second }
+            val randomValue = Math.random() * totalWeight
+            var accumWeight = 0.0
+            var chosenItem: ImageMetadata? = null
+
+            for (item in candidateItems) {
+                accumWeight += item.second
+                if (accumWeight >= randomValue) {
+                    chosenItem = item.first
+                    break
+                }
+            }
+            if (chosenItem == null) {
+                chosenItem = candidateItems.last().first
+            }
+
+            selectedUri = chosenItem.uri
+
+            // Capacidad de memoria sin repetición: al menos el 85% del total de imágenes o total-1
+            val maxHistoryCapacity = max(1, (totalNonBlacklistedCount * 0.85).toInt())
+
+            // Guardar en el historial
+            recentHistory.add(selectedUri.toString())
+            while (recentHistory.size > maxHistoryCapacity) {
+                recentHistory.removeAt(0)
+            }
+            prefs.edit().putString("${prefix}recent_history", recentHistory.joinToString(",")).apply()
+
+            Log.d(TAG, "Modo aleatorio (prioritizeRecent=$prioritizeRecent): seleccionada $selectedUri | historial=${recentHistory.size}/$maxHistoryCapacity | total elegibles=${candidateItems.size}/$totalNonBlacklistedCount")
         } else {
             // Modo secuencial: mezclamos todas las imágenes de todas las carpetas y recorremos en orden
             val imageUris = getCombinedImagesForScreen(context, isLockScreen)

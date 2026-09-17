@@ -100,6 +100,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var switchHomeAdaptiveBrightness: SwitchCompat
     private lateinit var btnLockClearBlacklist: Button
     private lateinit var switchLockAdaptiveBrightness: SwitchCompat
+    private lateinit var switchHomePrioritizeRecent: SwitchCompat
+    private lateinit var switchLockPrioritizeRecent: SwitchCompat
 
     private var homePreviewLuminance = 1.0f
     private var lockPreviewLuminance = 1.0f
@@ -226,6 +228,8 @@ class MainActivity : AppCompatActivity() {
         switchLockAdaptiveBrightness = findViewById(R.id.switch_lock_adaptive_brightness)
         layoutHomeFoldersList = findViewById(R.id.layout_home_folders_list)
         layoutLockFoldersList = findViewById(R.id.layout_lock_folders_list)
+        switchHomePrioritizeRecent = findViewById(R.id.switch_home_prioritize_recent)
+        switchLockPrioritizeRecent = findViewById(R.id.switch_lock_prioritize_recent)
 
         // v0.4 Downloader bindings
         tabDownloader = findViewById(R.id.tab_downloader)
@@ -406,6 +410,8 @@ class MainActivity : AppCompatActivity() {
         // v0.4 cargar estados
         switchHomeAdaptiveBrightness.isChecked = prefs.getBoolean("home_adaptive_dim", false)
         switchLockAdaptiveBrightness.isChecked = prefs.getBoolean("lock_adaptive_dim", false)
+        switchHomePrioritizeRecent.isChecked = prefs.getBoolean("home_prioritize_recent", true)
+        switchLockPrioritizeRecent.isChecked = prefs.getBoolean("lock_prioritize_recent", true)
         updateBlacklistButtons()
 
         // CONFIGURACIÓN AUTO-DESCARGADOR (v0.4)
@@ -555,6 +561,14 @@ class MainActivity : AppCompatActivity() {
         switchLockAdaptiveBrightness.setOnCheckedChangeListener { _, isChecked ->
             prefs.edit().putBoolean("lock_adaptive_dim", isChecked).apply()
             updateBrightnessText(sbLockBrightness.progress, isLockScreen = true)
+        }
+
+        switchHomePrioritizeRecent.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean("home_prioritize_recent", isChecked).apply()
+        }
+
+        switchLockPrioritizeRecent.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean("lock_prioritize_recent", isChecked).apply()
         }
 
         btnHomeClearBlacklist.setOnClickListener {
