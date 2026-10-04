@@ -86,6 +86,19 @@
             android:textStyle="bold"
             android:textAllCaps="false"
             android:elevation="4dp"
+            android:layout_marginBottom="12dp" />
+
+        <!-- Botón Activar Video Wallpaper Animado (En Vivo) -->
+        <android.widget.Button
+            android:id="@+id/btn_enable_live_wallpaper"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:background="@drawable/bg_card"
+            android:text="🎬 Activar Video Wallpaper Animado (En Vivo)"
+            android:textColor="@color/secondary"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textAllCaps="false"
             android:layout_marginBottom="24dp" />
 
         <!-- Control de Pestañas (Inicio vs Bloqueo vs Descargas) -->

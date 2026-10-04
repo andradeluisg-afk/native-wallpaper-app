@@ -1,14 +1,15 @@
 package com.wallpaper.nativeapp
 
 import android.content.SharedPreferences
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.Rect
 import android.media.MediaMetadataRetriever
 import android.media.MediaPlayer
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.service.wallpaper.WallpaperService
@@ -43,7 +44,11 @@ class VideoLiveWallpaperService : WallpaperService() {
             Log.d(TAG, "Visibilidad cambiada: $visible | isVideo=$isVideo")
             if (visible) {
                 if (isVideo) {
-                    mediaPlayer?.start()
+                    if (mediaPlayer == null && currentUri != null) {
+                        playVideo(currentUri!!)
+                    } else {
+                        mediaPlayer?.start()
+                    }
                 } else {
                     drawStaticImage()
                 }
@@ -57,8 +62,8 @@ class VideoLiveWallpaperService : WallpaperService() {
         override fun onSurfaceCreated(holder: SurfaceHolder) {
             super.onSurfaceCreated(holder)
             Log.d(TAG, "Superficie creada")
-            if (isVideo) {
-                mediaPlayer?.setDisplay(holder)
+            if (isVideo && currentUri != null) {
+                playVideo(currentUri!!)
             } else {
                 drawStaticImage()
             }
@@ -77,7 +82,8 @@ class VideoLiveWallpaperService : WallpaperService() {
         }
 
         override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
-            if (key == "home_active_uri" || key == "home_active_is_video" || key == "home_brightness") {
+            if (key == "home_active_uri" || key == "home_active_is_video" || key == "home_brightness" ||
+                key == "lock_active_uri" || key == "lock_active_is_video" || key == "lock_brightness") {
                 Log.d(TAG, "Preferencia cambiada ($key). Actualizando fondo de video/imagen...")
                 Handler(Looper.getMainLooper()).post {
                     loadAndPlayActiveWallpaper()
@@ -86,15 +92,20 @@ class VideoLiveWallpaperService : WallpaperService() {
         }
 
         private fun loadAndPlayActiveWallpaper() {
-            val uriStr = prefs.getString("home_active_uri", null)
+            var uriStr = prefs.getString("home_active_uri", null)
+            var videoFlag = prefs.getBoolean("home_active_is_video", false)
+
+            if (uriStr.isNullOrEmpty()) {
+                uriStr = prefs.getString("lock_active_uri", null)
+                videoFlag = prefs.getBoolean("lock_active_is_video", false)
+            }
+
             if (uriStr.isNullOrEmpty()) {
                 drawDefaultBackground()
                 return
             }
 
             val uri = Uri.parse(uriStr)
-            val videoFlag = prefs.getBoolean("home_active_is_video", false)
-
             currentUri = uri
             isVideo = videoFlag
 
@@ -114,9 +125,17 @@ class VideoLiveWallpaperService : WallpaperService() {
                     setDisplay(surfaceHolder)
                     isLooping = true
                     setVolume(0f, 0f) // Silencioso para fondos de pantalla
+                    
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
+                        setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
+                    }
+
                     prepareAsync()
                     setOnPreparedListener { mp ->
                         Log.d(TAG, "Video preparado y listo para reproducir")
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
+                            mp.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
+                        }
                         if (isVisibleState) {
                             mp.start()
                         }
@@ -143,21 +162,49 @@ class VideoLiveWallpaperService : WallpaperService() {
             try {
                 val canvas = holder.lockCanvas() ?: return
                 try {
-                    val inputStream = contentResolver.openInputStream(uri)
-                    val bitmap = BitmapFactory.decodeStream(inputStream)
-                    inputStream?.close()
+                    val rawBitmap: Bitmap? = if (isVideo) {
+                        val retriever = MediaMetadataRetriever()
+                        try {
+                            retriever.setDataSource(applicationContext, uri)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                retriever.getScaledFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, canvas.width, canvas.height)
+                            } else {
+                                retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                            }
+                        } catch (e: Exception) {
+                            null
+                        } finally {
+                            try { retriever.release() } catch (ignored: Exception) {}
+                        }
+                    } else {
+                        val inputStream = contentResolver.openInputStream(uri)
+                        val b = BitmapFactory.decodeStream(inputStream)
+                        inputStream?.close()
+                        b
+                    }
 
-                    if (bitmap != null) {
+                    if (rawBitmap != null) {
                         val screenWidth = canvas.width
                         val screenHeight = canvas.height
-                        val srcRect = Rect(0, 0, bitmap.width, bitmap.height)
-                        val dstRect = Rect(0, 0, screenWidth, screenHeight)
+                        
+                        val fitMode = prefs.getString("home_fit_mode", "fill") ?: "fill"
+                        val brightness = prefs.getInt("home_brightness", 100)
+                        val crop = prefs.getBoolean("home_crop", true)
+                        val adaptiveDim = prefs.getBoolean("home_adaptive_dim", false)
+                        
+                        val processed = WallpaperHelper.processBitmap(rawBitmap, screenWidth, screenHeight, fitMode, brightness, crop, adaptiveDim)
+                        rawBitmap.recycle()
 
-                        val paint = Paint().apply {
-                            isFilterBitmap = true
-                            isAntiAlias = true
+                        if (processed != null) {
+                            val paint = Paint().apply {
+                                isFilterBitmap = true
+                                isAntiAlias = true
+                            }
+                            canvas.drawBitmap(processed, 0f, 0f, paint)
+                            processed.recycle()
+                        } else {
+                            canvas.drawColor(Color.BLACK)
                         }
-                        canvas.drawBitmap(bitmap, srcRect, dstRect, paint)
                     } else {
                         canvas.drawColor(Color.BLACK)
                     }

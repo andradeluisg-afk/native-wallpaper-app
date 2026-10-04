@@ -301,11 +301,20 @@ object WallpaperHelper {
         var originalBitmap: Bitmap? = null
 
         if (isVideoFile) {
-            Log.d(TAG, "Archivo seleccionado es un VIDEO: $selectedUri. Extrayendo fotograma...")
+            Log.d(TAG, "Archivo seleccionado es un VIDEO: $selectedUri. Extrayendo fotograma de alta definición...")
             val retriever = MediaMetadataRetriever()
             try {
                 retriever.setDataSource(context, selectedUri)
-                originalBitmap = retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    try {
+                        originalBitmap = retriever.getScaledFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, reqWidth, screenHeight)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "getScaledFrameAtTime no disponible, usando fallback: ${e.message}")
+                    }
+                }
+                if (originalBitmap == null) {
+                    originalBitmap = retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error extrayendo fotograma de video: ${e.message}", e)
             } finally {

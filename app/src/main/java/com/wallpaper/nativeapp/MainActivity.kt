@@ -1,6 +1,7 @@
 package com.wallpaper.nativeapp
 
 import android.app.Activity
+import android.app.WallpaperManager
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
@@ -33,6 +34,7 @@ class MainActivity : AppCompatActivity() {
     // UI Elements
     private lateinit var switchService: SwitchCompat
     private lateinit var btnChangeNow: Button
+    private lateinit var btnEnableLiveWallpaper: Button
     private lateinit var tabHome: TextView
     private lateinit var tabLock: TextView
     private lateinit var layoutHomeSettings: LinearLayout
@@ -164,6 +166,7 @@ class MainActivity : AppCompatActivity() {
     private fun initViews() {
         switchService = findViewById(R.id.switch_service)
         btnChangeNow = findViewById(R.id.btn_change_now)
+        btnEnableLiveWallpaper = findViewById(R.id.btn_enable_live_wallpaper)
         tabHome = findViewById(R.id.tab_home)
         tabLock = findViewById(R.id.tab_lock)
         layoutHomeSettings = findViewById(R.id.layout_home_settings)
@@ -621,6 +624,23 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     Toast.makeText(this@MainActivity, "Error al cambiar fondos. Verifica las carpetas.", Toast.LENGTH_SHORT).show()
                 }
+            }
+        }
+
+        // Botón Activar Video Wallpaper Animado (En Vivo)
+        btnEnableLiveWallpaper.setOnClickListener {
+            try {
+                val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
+                    putExtra(
+                        WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
+                        ComponentName(this@MainActivity, VideoLiveWallpaperService::class.java)
+                    )
+                }
+                startActivity(intent)
+                Toast.makeText(this, "Selecciona WallFlow y presiona 'Aplicar' para reproducir videos animados", Toast.LENGTH_LONG).show()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error al abrir el selector de Live Wallpaper: ${e.message}", e)
+                Toast.makeText(this, "No se pudo abrir el selector de fondos animados del sistema", Toast.LENGTH_SHORT).show()
             }
         }
 
