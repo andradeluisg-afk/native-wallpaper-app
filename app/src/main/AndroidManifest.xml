@@ -42,6 +42,21 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!-- Servicio de Wallpaper Animado / Video (v4.0) -->
+        <service
+            android:name=".VideoLiveWallpaperService"
+            android:enabled="true"
+            android:exported="true"
+            android:label="WallFlow Video Wallpaper"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter>
+                <action android:name="android.service.wallpaper.WallpaperService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.wallpaper"
+                android:resource="@xml/wallpaper_service" />
+        </service>
+
         <!-- Receptor de Arranque para reprogramar tareas al reiniciar el móvil -->
         <receiver
             android:name=".BootReceiver"

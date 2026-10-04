@@ -23,11 +23,12 @@ object WallpaperHelper {
 
     data class ImageMetadata(
         val uri: Uri,
-        val lastModified: Long
+        val lastModified: Long,
+        val isVideo: Boolean = false
     )
 
     /**
-     * Obtiene la lista de imágenes con metadatos de fecha dentro de una carpeta seleccionada por SAF
+     * Obtiene la lista de imágenes y videos con metadatos de fecha dentro de una carpeta seleccionada por SAF
      */
     fun getImagesWithMetadataFromFolder(context: Context, folderUriString: String?): List<ImageMetadata> {
         if (folderUriString.isNullOrEmpty()) return emptyList()
@@ -56,10 +57,14 @@ object WallpaperHelper {
                     if (idIndex >= 0 && mimeIndex >= 0) {
                         val docId = cursor.getString(idIndex)
                         val mimeType = cursor.getString(mimeIndex)
-                        if (mimeType != null && mimeType.startsWith("image/")) {
-                            val lastMod = if (modIndex >= 0 && !cursor.isNull(modIndex)) cursor.getLong(modIndex) else 0L
-                            val fileUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
-                            list.add(ImageMetadata(fileUri, lastMod))
+                        if (mimeType != null) {
+                            val isImage = mimeType.startsWith("image/")
+                            val isVideo = mimeType.startsWith("video/")
+                            if (isImage || isVideo) {
+                                val lastMod = if (modIndex >= 0 && !cursor.isNull(modIndex)) cursor.getLong(modIndex) else 0L
+                                val fileUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
+                                list.add(ImageMetadata(fileUri, lastMod, isVideo))
+                            }
                         }
                     }
                 }
@@ -71,7 +76,7 @@ object WallpaperHelper {
     }
 
     /**
-     * Obtiene la lista de URIs de imágenes dentro de una carpeta seleccionada por SAF
+     * Obtiene la lista de URIs de imágenes/videos dentro de una carpeta seleccionada por SAF
      */
     fun getImagesFromFolder(context: Context, folderUriString: String?): List<Uri> {
         return getImagesWithMetadataFromFolder(context, folderUriString).map { it.uri }
@@ -98,7 +103,7 @@ object WallpaperHelper {
     }
 
     /**
-     * Retorna la lista combinada de imágenes de todas las carpetas configuradas
+     * Retorna la lista combinada de imágenes/videos de todas las carpetas configuradas
      * para esta pantalla, más la carpeta de descargas automáticas (si está definida).
      */
     fun getCombinedImagesForScreen(context: Context, isLockScreen: Boolean): List<Uri> {
@@ -126,7 +131,7 @@ object WallpaperHelper {
         val blacklist = prefs.getStringSet("${prefix}blacklist", emptySet()) ?: emptySet()
         val order = prefs.getString("${prefix}order", "random") ?: "random"
         val prioritizeRecent = prefs.getBoolean("${prefix}prioritize_recent", true)
-        var selectedUri: Uri? = null
+        var selectedItem: ImageMetadata? = null
 
         if (order == "random") {
             val folders = getConfiguredFoldersForScreen(context, isLockScreen)
@@ -135,7 +140,7 @@ object WallpaperHelper {
                 return false
             }
 
-            // Cargar historial reciente de imágenes mostradas
+            // Cargar historial reciente de imágenes/videos mostrados
             val historyString = prefs.getString("${prefix}recent_history", "") ?: ""
             var recentHistory = if (historyString.isBlank()) {
                 mutableListOf()
@@ -156,7 +161,7 @@ object WallpaperHelper {
 
                 totalNonBlacklistedCount += filteredFolderImages.size
 
-                // Filtrar imágenes que están en el historial de no-repetición
+                // Filtrar imágenes/videos que están en el historial de no-repetición
                 val eligibleFolderImages = filteredFolderImages.filter { !recentHistory.contains(it.uri.toString()) }
                 if (eligibleFolderImages.isEmpty()) continue
 
@@ -178,9 +183,9 @@ object WallpaperHelper {
                 }
             }
 
-            // Si se agotaron los candidatos porque TODAS las imágenes están en el historial:
+            // Si se agotaron los candidatos porque TODAS las imágenes han sido mostradas:
             if (candidateItems.isEmpty() && totalNonBlacklistedCount > 0) {
-                Log.d(TAG, "Todas las $totalNonBlacklistedCount imágenes han sido mostradas. Reiniciando ciclo de historial.")
+                Log.d(TAG, "Todas las $totalNonBlacklistedCount fotos/videos han sido mostrados. Reiniciando ciclo de historial.")
                 recentHistory.clear()
                 prefs.edit().remove("${prefix}recent_history").apply()
 
@@ -207,7 +212,7 @@ object WallpaperHelper {
             }
 
             if (candidateItems.isEmpty()) {
-                Log.w(TAG, "No hay imágenes disponibles para seleccionar en " + if (isLockScreen) "bloqueo" else "inicio")
+                Log.w(TAG, "No hay archivos disponibles para seleccionar en " + if (isLockScreen) "bloqueo" else "inicio")
                 return false
             }
 
@@ -215,54 +220,64 @@ object WallpaperHelper {
             val totalWeight = candidateItems.sumOf { it.second }
             val randomValue = Math.random() * totalWeight
             var accumWeight = 0.0
-            var chosenItem: ImageMetadata? = null
 
             for (item in candidateItems) {
                 accumWeight += item.second
                 if (accumWeight >= randomValue) {
-                    chosenItem = item.first
+                    selectedItem = item.first
                     break
                 }
             }
-            if (chosenItem == null) {
-                chosenItem = candidateItems.last().first
+            if (selectedItem == null) {
+                selectedItem = candidateItems.last().first
             }
 
-            selectedUri = chosenItem.uri
-
-            // Capacidad de memoria sin repetición: al menos el 85% del total de imágenes o total-1
+            // Capacidad de memoria sin repetición
             val maxHistoryCapacity = max(1, (totalNonBlacklistedCount * 0.85).toInt())
 
             // Guardar en el historial
-            recentHistory.add(selectedUri.toString())
+            recentHistory.add(selectedItem.uri.toString())
             while (recentHistory.size > maxHistoryCapacity) {
                 recentHistory.removeAt(0)
             }
             prefs.edit().putString("${prefix}recent_history", recentHistory.joinToString(",")).apply()
 
-            Log.d(TAG, "Modo aleatorio (prioritizeRecent=$prioritizeRecent): seleccionada $selectedUri | historial=${recentHistory.size}/$maxHistoryCapacity | total elegibles=${candidateItems.size}/$totalNonBlacklistedCount")
+            Log.d(TAG, "Modo aleatorio (prioritizeRecent=$prioritizeRecent): seleccionada ${selectedItem.uri} (isVideo=${selectedItem.isVideo})")
         } else {
-            // Modo secuencial: mezclamos todas las imágenes de todas las carpetas y recorremos en orden
-            val imageUris = getCombinedImagesForScreen(context, isLockScreen)
-            val filteredImageUris = imageUris.filter { !blacklist.contains(it.toString()) }
-            if (filteredImageUris.isNotEmpty()) {
-                val totalImages = filteredImageUris.size
+            // Modo secuencial: mezclamos todos los archivos de todas las carpetas y recorremos en orden
+            val folders = getConfiguredFoldersForScreen(context, isLockScreen)
+            val allMedia = mutableListOf<ImageMetadata>()
+            for (f in folders) {
+                allMedia.addAll(getImagesWithMetadataFromFolder(context, f))
+            }
+            val filteredMedia = allMedia.filter { !blacklist.contains(it.uri.toString()) }
+            if (filteredMedia.isNotEmpty()) {
+                val totalImages = filteredMedia.size
                 var currentIndex = prefs.getInt("${prefix}current_index", 0)
                 if (currentIndex >= totalImages) {
                     currentIndex = 0
                 }
-                selectedUri = filteredImageUris[currentIndex]
+                selectedItem = filteredMedia[currentIndex]
 
-                // Avanzar al siguiente y guardar en cache
                 val nextIndex = (currentIndex + 1) % totalImages
                 prefs.edit().putInt("${prefix}current_index", nextIndex).apply()
-                Log.d(TAG, "Modo secuencial: index $currentIndex/$totalImages. Siguiente: $nextIndex")
             }
         }
 
-        if (selectedUri == null) {
-            Log.w(TAG, "No se pudo seleccionar ninguna imagen válida para la pantalla de " + if (isLockScreen) "bloqueo" else "inicio")
+        if (selectedItem == null) {
+            Log.w(TAG, "No se pudo seleccionar ningún archivo válido para " + if (isLockScreen) "bloqueo" else "inicio")
             return false
+        }
+
+        val selectedUri = selectedItem.uri
+        val isVideoFile = selectedItem.isVideo
+
+        // Guardar estado activo para Live Wallpaper / Widgets
+        prefs.edit().apply {
+            putString("${prefix}active_uri", selectedUri.toString())
+            putBoolean("${prefix}active_is_video", isVideoFile)
+            putString("${prefix}current_uri", selectedUri.toString())
+            apply()
         }
 
         // Configuración de estilo y atenuación
@@ -275,45 +290,52 @@ object WallpaperHelper {
         val metrics = context.resources.displayMetrics
         val screenWidth = metrics.widthPixels
         val screenHeight = metrics.heightPixels
-
-        // Para modo relleno sin recorte cargamos a mayor resolución (imagen más ancha)
         val reqWidth = if (fitMode == "fill" && !crop) screenWidth * 3 else screenWidth
 
-        Log.d(TAG, "Procesando imagen: URI=$selectedUri | Pantalla=${screenWidth}x${screenHeight} | Fit=$fitMode | Crop=$crop | Brillo=$brightness% | Adaptativo=$adaptiveDim")
+        var originalBitmap: Bitmap? = null
 
-        // Decodificar la imagen optimizada para el tamaño de la pantalla
-        val originalBitmap = decodeSampledBitmap(context, selectedUri, reqWidth, screenHeight)
+        if (isVideoFile) {
+            Log.d(TAG, "Archivo seleccionado es un VIDEO: $selectedUri. Extrayendo fotograma...")
+            val retriever = MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(context, selectedUri)
+                originalBitmap = retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error extrayendo fotograma de video: ${e.message}", e)
+            } finally {
+                try { retriever.release() } catch (ignored: Exception) {}
+            }
+        } else {
+            originalBitmap = decodeSampledBitmap(context, selectedUri, reqWidth, screenHeight)
+        }
+
         if (originalBitmap == null) {
-            Log.e(TAG, "No se pudo decodificar la imagen: $selectedUri")
+            Log.e(TAG, "No se pudo obtener fotograma o imagen para: $selectedUri")
             return false
         }
 
-        // Procesar la imagen (escalado y brillo)
         val processedBitmap = processBitmap(originalBitmap, screenWidth, screenHeight, fitMode, brightness, crop, adaptiveDim)
-        originalBitmap.recycle() // Liberar memoria de la imagen decodificada original
+        originalBitmap.recycle()
 
         if (processedBitmap == null) {
             Log.e(TAG, "Error procesando el bitmap")
             return false
         }
 
-        // Aplicar fondo
+        // Aplicar fondo mediante WallpaperManager
         val wallpaperManager = WallpaperManager.getInstance(context)
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 val flag = if (isLockScreen) WallpaperManager.FLAG_LOCK else WallpaperManager.FLAG_SYSTEM
                 wallpaperManager.setBitmap(processedBitmap, null, true, flag)
-                Log.d(TAG, "Fondo de " + (if (isLockScreen) "bloqueo" else "inicio") + " actualizado exitosamente.")
+                Log.d(TAG, "Fondo de " + (if (isLockScreen) "bloqueo" else "inicio") + " actualizado (isVideo=$isVideoFile).")
             } else {
                 wallpaperManager.setBitmap(processedBitmap)
-                Log.d(TAG, "Fondo de pantalla actualizado para ambas pantallas (API < 24).")
             }
-            // Guardar la URI actual para la lista negra
-            prefs.edit().putString("${prefix}current_uri", selectedUri.toString()).apply()
-            processedBitmap.recycle() // Liberar memoria del bitmap final
+            processedBitmap.recycle()
             true
         } catch (e: Exception) {
-            Log.e(TAG, "Error al configurar fondo de pantalla en el sistema: ${e.message}", e)
+            Log.e(TAG, "Error al configurar fondo en el sistema: ${e.message}", e)
             if (!processedBitmap.isRecycled) {
                 processedBitmap.recycle()
             }

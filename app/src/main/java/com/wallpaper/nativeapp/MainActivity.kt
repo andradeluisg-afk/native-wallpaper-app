@@ -856,7 +856,7 @@ class MainActivity : AppCompatActivity() {
             val blacklist = prefs.getStringSet("${prefix}blacklist", emptySet()) ?: emptySet()
             val filteredImages = images.filter { !blacklist.contains(it.toString()) }
             
-            tvCount.text = "${filteredImages.size} imágenes encontradas"
+            tvCount.text = "${filteredImages.size} archivos (fotos/videos) encontrados"
             
             if (filteredImages.isNotEmpty()) {
                 val order = prefs.getString("${prefix}order", "random") ?: "random"
