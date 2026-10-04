@@ -55,17 +55,21 @@ object WallpaperHelper {
                 val modIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
 
                 while (cursor.moveToNext()) {
-                    if (idIndex >= 0 && mimeIndex >= 0) {
-                        val docId = cursor.getString(idIndex)
-                        val mimeType = cursor.getString(mimeIndex)
-                        if (mimeType != null) {
-                            val isImage = mimeType.startsWith("image/")
-                            val isVideo = mimeType.startsWith("video/")
-                            if (isImage || isVideo) {
-                                val lastMod = if (modIndex >= 0 && !cursor.isNull(modIndex)) cursor.getLong(modIndex) else 0L
-                                val fileUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
-                                list.add(ImageMetadata(fileUri, lastMod, isVideo))
-                            }
+                    if (idIndex >= 0) {
+                        val docId = cursor.getString(idIndex) ?: ""
+                        val mimeType = if (mimeIndex >= 0) cursor.getString(mimeIndex) else null
+                        
+                        val docIdLower = docId.lowercase()
+                        val isVideoExt = docIdLower.endsWith(".mp4") || docIdLower.endsWith(".mkv") || docIdLower.endsWith(".webm") || docIdLower.endsWith(".3gp")
+                        val isImageExt = docIdLower.endsWith(".jpg") || docIdLower.endsWith(".jpeg") || docIdLower.endsWith(".png") || docIdLower.endsWith(".webp") || docIdLower.endsWith(".gif")
+
+                        var isVideo = (mimeType != null && mimeType.startsWith("video/")) || isVideoExt
+                        var isImage = (mimeType != null && mimeType.startsWith("image/")) || isImageExt
+
+                        if (isImage || isVideo) {
+                            val lastMod = if (modIndex >= 0 && !cursor.isNull(modIndex)) cursor.getLong(modIndex) else 0L
+                            val fileUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
+                            list.add(ImageMetadata(fileUri, lastMod, isVideo))
                         }
                     }
                 }
@@ -132,6 +136,7 @@ object WallpaperHelper {
         val blacklist = prefs.getStringSet("${prefix}blacklist", emptySet()) ?: emptySet()
         val order = prefs.getString("${prefix}order", "random") ?: "random"
         val prioritizeRecent = prefs.getBoolean("${prefix}prioritize_recent", true)
+        val animateVideo = prefs.getBoolean("${prefix}animate_video", true)
         var selectedItem: ImageMetadata? = null
 
         if (order == "random") {
@@ -271,7 +276,7 @@ object WallpaperHelper {
         }
 
         val selectedUri = selectedItem.uri
-        val isVideoFile = selectedItem.isVideo
+        val isVideoFile = selectedItem.isVideo && animateVideo
 
         // Guardar estado activo para Live Wallpaper / Widgets
         prefs.edit().apply {

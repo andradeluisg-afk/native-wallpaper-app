@@ -102,6 +102,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var switchLockAdaptiveBrightness: SwitchCompat
     private lateinit var switchHomePrioritizeRecent: SwitchCompat
     private lateinit var switchLockPrioritizeRecent: SwitchCompat
+    private lateinit var switchHomeAnimateVideo: SwitchCompat
+    private lateinit var switchLockAnimateVideo: SwitchCompat
 
     private var homePreviewLuminance = 1.0f
     private var lockPreviewLuminance = 1.0f
@@ -230,6 +232,8 @@ class MainActivity : AppCompatActivity() {
         layoutLockFoldersList = findViewById(R.id.layout_lock_folders_list)
         switchHomePrioritizeRecent = findViewById(R.id.switch_home_prioritize_recent)
         switchLockPrioritizeRecent = findViewById(R.id.switch_lock_prioritize_recent)
+        switchHomeAnimateVideo = findViewById(R.id.switch_home_animate_video)
+        switchLockAnimateVideo = findViewById(R.id.switch_lock_animate_video)
 
         // v0.4 Downloader bindings
         tabDownloader = findViewById(R.id.tab_downloader)
@@ -412,6 +416,8 @@ class MainActivity : AppCompatActivity() {
         switchLockAdaptiveBrightness.isChecked = prefs.getBoolean("lock_adaptive_dim", false)
         switchHomePrioritizeRecent.isChecked = prefs.getBoolean("home_prioritize_recent", true)
         switchLockPrioritizeRecent.isChecked = prefs.getBoolean("lock_prioritize_recent", true)
+        switchHomeAnimateVideo.isChecked = prefs.getBoolean("home_animate_video", true)
+        switchLockAnimateVideo.isChecked = prefs.getBoolean("lock_animate_video", true)
         updateBlacklistButtons()
 
         // CONFIGURACIÓN AUTO-DESCARGADOR (v0.4)
@@ -569,6 +575,14 @@ class MainActivity : AppCompatActivity() {
 
         switchLockPrioritizeRecent.setOnCheckedChangeListener { _, isChecked ->
             prefs.edit().putBoolean("lock_prioritize_recent", isChecked).apply()
+        }
+
+        switchHomeAnimateVideo.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean("home_animate_video", isChecked).apply()
+        }
+
+        switchLockAnimateVideo.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean("lock_animate_video", isChecked).apply()
         }
 
         btnHomeClearBlacklist.setOnClickListener {
