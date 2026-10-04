@@ -286,6 +286,15 @@ object WallpaperHelper {
             apply()
         }
 
+        // Si es un VIDEO animado y la opción de animar está activa:
+        // No ejecutamos wallpaperManager.setBitmap() porque en Android esa llamada destruye el motor
+        // de Live Wallpaper activo y lo reemplaza por una foto estática.
+        // VideoLiveWallpaperService reaccionará al cambio en SharedPreferences y reproducirá el MP4 en vivo.
+        if (isVideoFile) {
+            Log.d(TAG, "Archivo seleccionado es un VIDEO animado: $selectedUri. Guardado en SharedPreferences para VideoLiveWallpaperService.")
+            return true
+        }
+
         // Configuración de estilo y atenuación
         val fitMode = prefs.getString("${prefix}fit_mode", "fill") ?: "fill"
         val brightness = prefs.getInt("${prefix}brightness", 100)

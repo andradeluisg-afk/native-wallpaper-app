@@ -12,6 +12,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.ParcelFileDescriptor
 import android.service.wallpaper.WallpaperService
 import android.util.Log
 import android.view.SurfaceHolder
@@ -27,6 +28,7 @@ class VideoLiveWallpaperService : WallpaperService() {
     inner class VideoEngine : Engine(), SharedPreferences.OnSharedPreferenceChangeListener {
 
         private var mediaPlayer: MediaPlayer? = null
+        private var activePfd: ParcelFileDescriptor? = null
         private var currentUri: Uri? = null
         private var isVideo = false
         private var isVisibleState = false
@@ -120,8 +122,15 @@ class VideoLiveWallpaperService : WallpaperService() {
         private fun playVideo(uri: Uri) {
             releaseMediaPlayer()
             try {
+                activePfd = applicationContext.contentResolver.openFileDescriptor(uri, "r")
+                if (activePfd == null) {
+                    Log.e(TAG, "No se pudo abrir ParcelFileDescriptor para URI: $uri")
+                    drawStaticImage()
+                    return
+                }
+
                 mediaPlayer = MediaPlayer().apply {
-                    setDataSource(applicationContext, uri)
+                    setDataSource(activePfd!!.fileDescriptor)
                     setDisplay(surfaceHolder)
                     isLooping = true
                     setVolume(0f, 0f) // Silencioso para fondos de pantalla
@@ -132,7 +141,7 @@ class VideoLiveWallpaperService : WallpaperService() {
 
                     prepareAsync()
                     setOnPreparedListener { mp ->
-                        Log.d(TAG, "Video preparado y listo para reproducir")
+                        Log.d(TAG, "Video MP4 preparado y listo para reproducir vía FileDescriptor")
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
                             mp.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
                         }
@@ -148,7 +157,7 @@ class VideoLiveWallpaperService : WallpaperService() {
                     }
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error iniciando reproducción de video: ${e.message}", e)
+                Log.e(TAG, "Error iniciando reproducción de video MP4: ${e.message}", e)
                 releaseMediaPlayer()
                 drawStaticImage()
             }
@@ -164,16 +173,21 @@ class VideoLiveWallpaperService : WallpaperService() {
                 try {
                     val rawBitmap: Bitmap? = if (isVideo) {
                         val retriever = MediaMetadataRetriever()
+                        var pfd: ParcelFileDescriptor? = null
                         try {
-                            retriever.setDataSource(applicationContext, uri)
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                retriever.getScaledFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, canvas.width, canvas.height)
-                            } else {
-                                retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                            }
+                            pfd = contentResolver.openFileDescriptor(uri, "r")
+                            if (pfd != null) {
+                                retriever.setDataSource(pfd.fileDescriptor)
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                    retriever.getScaledFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, canvas.width, canvas.height)
+                                } else {
+                                    retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                                }
+                            } else null
                         } catch (e: Exception) {
                             null
                         } finally {
+                            try { pfd?.close() } catch (ignored: Exception) {}
                             try { retriever.release() } catch (ignored: Exception) {}
                         }
                     } else {
@@ -236,6 +250,12 @@ class VideoLiveWallpaperService : WallpaperService() {
                 mediaPlayer = null
             } catch (e: Exception) {
                 Log.e(TAG, "Error al liberar MediaPlayer: ${e.message}")
+            }
+            try {
+                activePfd?.close()
+                activePfd = null
+            } catch (e: Exception) {
+                Log.e(TAG, "Error al cerrar ParcelFileDescriptor: ${e.message}")
             }
         }
     }
