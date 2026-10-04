@@ -103,6 +103,16 @@ class VideoLiveWallpaperService : WallpaperService() {
             }
 
             if (uriStr.isNullOrEmpty()) {
+                Log.d(TAG, "No hay URI activa. Intentando seleccionar un fondo inicial automáticamente...")
+                val success = WallpaperHelper.changeWallpaper(applicationContext, isLockScreen = false)
+                if (success) {
+                    uriStr = prefs.getString("home_active_uri", null)
+                    videoFlag = prefs.getBoolean("home_active_is_video", false)
+                }
+            }
+
+            if (uriStr.isNullOrEmpty()) {
+                Log.w(TAG, "No hay archivos en carpetas. Dibujando fondo negro por defecto.")
                 drawDefaultBackground()
                 return
             }
@@ -122,15 +132,18 @@ class VideoLiveWallpaperService : WallpaperService() {
         private fun playVideo(uri: Uri) {
             releaseMediaPlayer()
             try {
-                activePfd = applicationContext.contentResolver.openFileDescriptor(uri, "r")
-                if (activePfd == null) {
-                    Log.e(TAG, "No se pudo abrir ParcelFileDescriptor para URI: $uri")
-                    drawStaticImage()
-                    return
+                try {
+                    activePfd = applicationContext.contentResolver.openFileDescriptor(uri, "r")
+                } catch (e: Exception) {
+                    Log.w(TAG, "openFileDescriptor falló para $uri, usando setDataSource por URI: ${e.message}")
                 }
 
                 mediaPlayer = MediaPlayer().apply {
-                    setDataSource(activePfd!!.fileDescriptor)
+                    if (activePfd != null) {
+                        setDataSource(activePfd!!.fileDescriptor)
+                    } else {
+                        setDataSource(applicationContext, uri)
+                    }
                     setDisplay(surfaceHolder)
                     isLooping = true
                     setVolume(0f, 0f) // Silencioso para fondos de pantalla
@@ -141,7 +154,7 @@ class VideoLiveWallpaperService : WallpaperService() {
 
                     prepareAsync()
                     setOnPreparedListener { mp ->
-                        Log.d(TAG, "Video MP4 preparado y listo para reproducir vía FileDescriptor")
+                        Log.d(TAG, "Video MP4 preparado y listo para reproducir en vivo")
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
                             mp.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
                         }

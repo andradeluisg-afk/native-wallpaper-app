@@ -419,8 +419,8 @@ class MainActivity : AppCompatActivity() {
         switchLockAdaptiveBrightness.isChecked = prefs.getBoolean("lock_adaptive_dim", false)
         switchHomePrioritizeRecent.isChecked = prefs.getBoolean("home_prioritize_recent", true)
         switchLockPrioritizeRecent.isChecked = prefs.getBoolean("lock_prioritize_recent", true)
-        switchHomeAnimateVideo.isChecked = prefs.getBoolean("home_animate_video", true)
-        switchLockAnimateVideo.isChecked = prefs.getBoolean("lock_animate_video", true)
+        switchHomeAnimateVideo.isChecked = prefs.getBoolean("home_include_video", prefs.getBoolean("home_animate_video", true))
+        switchLockAnimateVideo.isChecked = prefs.getBoolean("lock_include_video", prefs.getBoolean("lock_animate_video", true))
         updateBlacklistButtons()
 
         // CONFIGURACIÓN AUTO-DESCARGADOR (v0.4)
@@ -581,11 +581,19 @@ class MainActivity : AppCompatActivity() {
         }
 
         switchHomeAnimateVideo.setOnCheckedChangeListener { _, isChecked ->
-            prefs.edit().putBoolean("home_animate_video", isChecked).apply()
+            prefs.edit().apply {
+                putBoolean("home_include_video", isChecked)
+                putBoolean("home_animate_video", isChecked)
+                apply()
+            }
         }
 
         switchLockAnimateVideo.setOnCheckedChangeListener { _, isChecked ->
-            prefs.edit().putBoolean("lock_animate_video", isChecked).apply()
+            prefs.edit().apply {
+                putBoolean("lock_include_video", isChecked)
+                putBoolean("lock_animate_video", isChecked)
+                apply()
+            }
         }
 
         btnHomeClearBlacklist.setOnClickListener {

@@ -45,26 +45,34 @@ object WallpaperHelper {
 
             val projection = arrayOf(
                 DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                DocumentsContract.Document.COLUMN_DISPLAY_NAME,
                 DocumentsContract.Document.COLUMN_MIME_TYPE,
                 DocumentsContract.Document.COLUMN_LAST_MODIFIED
             )
 
             context.contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
                 val idIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+                val nameIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
                 val mimeIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_MIME_TYPE)
                 val modIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
 
                 while (cursor.moveToNext()) {
                     if (idIndex >= 0) {
                         val docId = cursor.getString(idIndex) ?: ""
-                        val mimeType = if (mimeIndex >= 0) cursor.getString(mimeIndex) else null
-                        
-                        val docIdLower = docId.lowercase()
-                        val isVideoExt = docIdLower.endsWith(".mp4") || docIdLower.endsWith(".mkv") || docIdLower.endsWith(".webm") || docIdLower.endsWith(".3gp")
-                        val isImageExt = docIdLower.endsWith(".jpg") || docIdLower.endsWith(".jpeg") || docIdLower.endsWith(".png") || docIdLower.endsWith(".webp") || docIdLower.endsWith(".gif")
+                        val displayName = if (nameIndex >= 0 && !cursor.isNull(nameIndex)) cursor.getString(nameIndex) ?: "" else ""
+                        val mimeType = if (mimeIndex >= 0 && !cursor.isNull(mimeIndex)) cursor.getString(mimeIndex) else null
 
-                        var isVideo = (mimeType != null && mimeType.startsWith("video/")) || isVideoExt
-                        var isImage = (mimeType != null && mimeType.startsWith("image/")) || isImageExt
+                        // Ignorar subdirectorios
+                        if (mimeType == DocumentsContract.Document.MIME_TYPE_DIR || mimeType == "vnd.android.document/directory") {
+                            continue
+                        }
+                        
+                        val nameLower = (displayName + " " + docId).lowercase()
+                        val isVideoExt = nameLower.contains(".mp4") || nameLower.contains(".mkv") || nameLower.contains(".webm") || nameLower.contains(".3gp")
+                        val isImageExt = nameLower.contains(".jpg") || nameLower.contains(".jpeg") || nameLower.contains(".png") || nameLower.contains(".webp") || nameLower.contains(".gif")
+
+                        val isVideo = (mimeType != null && mimeType.startsWith("video/")) || isVideoExt
+                        val isImage = (mimeType != null && mimeType.startsWith("image/")) || isImageExt || (!isVideo && mimeType != null && (mimeType == "application/octet-stream" || mimeType == "binary/octet-stream"))
 
                         if (isImage || isVideo) {
                             val lastMod = if (modIndex >= 0 && !cursor.isNull(modIndex)) cursor.getLong(modIndex) else 0L
@@ -136,7 +144,7 @@ object WallpaperHelper {
         val blacklist = prefs.getStringSet("${prefix}blacklist", emptySet()) ?: emptySet()
         val order = prefs.getString("${prefix}order", "random") ?: "random"
         val prioritizeRecent = prefs.getBoolean("${prefix}prioritize_recent", true)
-        val animateVideo = prefs.getBoolean("${prefix}animate_video", true)
+        val includeVideo = prefs.getBoolean("${prefix}include_video", prefs.getBoolean("${prefix}animate_video", true))
         var selectedItem: ImageMetadata? = null
 
         if (order == "random") {
@@ -162,7 +170,10 @@ object WallpaperHelper {
                 val folderImages = getImagesWithMetadataFromFolder(context, chosenFolder)
                 if (folderImages.isEmpty()) continue
 
-                val filteredFolderImages = folderImages.filter { !blacklist.contains(it.uri.toString()) }
+                val folderMedia = if (!includeVideo) folderImages.filter { !it.isVideo } else folderImages
+                if (folderMedia.isEmpty()) continue
+
+                val filteredFolderImages = folderMedia.filter { !blacklist.contains(it.uri.toString()) }
                 if (filteredFolderImages.isEmpty()) continue
 
                 totalNonBlacklistedCount += filteredFolderImages.size
@@ -197,7 +208,8 @@ object WallpaperHelper {
 
                 for (chosenFolder in folders) {
                     val folderImages = getImagesWithMetadataFromFolder(context, chosenFolder)
-                    val filteredFolderImages = folderImages.filter { !blacklist.contains(it.uri.toString()) }
+                    val folderMedia = if (!includeVideo) folderImages.filter { !it.isVideo } else folderImages
+                    val filteredFolderImages = folderMedia.filter { !blacklist.contains(it.uri.toString()) }
                     if (filteredFolderImages.isEmpty()) continue
 
                     val sortedEligible = if (prioritizeRecent) {
@@ -254,7 +266,9 @@ object WallpaperHelper {
             val folders = getConfiguredFoldersForScreen(context, isLockScreen)
             val allMedia = mutableListOf<ImageMetadata>()
             for (f in folders) {
-                allMedia.addAll(getImagesWithMetadataFromFolder(context, f))
+                val images = getImagesWithMetadataFromFolder(context, f)
+                val media = if (!includeVideo) images.filter { !it.isVideo } else images
+                allMedia.addAll(media)
             }
             val filteredMedia = allMedia.filter { !blacklist.contains(it.uri.toString()) }
             if (filteredMedia.isNotEmpty()) {
@@ -276,7 +290,7 @@ object WallpaperHelper {
         }
 
         val selectedUri = selectedItem.uri
-        val isVideoFile = selectedItem.isVideo && animateVideo
+        val isVideoFile = selectedItem.isVideo && includeVideo
 
         // Guardar estado activo para Live Wallpaper / Widgets
         prefs.edit().apply {
@@ -286,12 +300,15 @@ object WallpaperHelper {
             apply()
         }
 
-        // Si es un VIDEO animado y la opción de animar está activa:
+        val wallpaperManager = WallpaperManager.getInstance(context)
+        val isLiveWallpaperActive = (wallpaperManager.wallpaperInfo != null && wallpaperManager.wallpaperInfo.packageName == context.packageName)
+
+        // Si es un VIDEO animado y la opción de incluir video está activa y el LiveWallpaper de la app está activo:
         // No ejecutamos wallpaperManager.setBitmap() porque en Android esa llamada destruye el motor
         // de Live Wallpaper activo y lo reemplaza por una foto estática.
         // VideoLiveWallpaperService reaccionará al cambio en SharedPreferences y reproducirá el MP4 en vivo.
-        if (isVideoFile) {
-            Log.d(TAG, "Archivo seleccionado es un VIDEO animado: $selectedUri. Guardado en SharedPreferences para VideoLiveWallpaperService.")
+        if (isVideoFile && isLiveWallpaperActive) {
+            Log.d(TAG, "Archivo seleccionado es un VIDEO animado: $selectedUri. SharedPreferences actualizadas para VideoLiveWallpaperService.")
             return true
         }
 
