@@ -5,13 +5,13 @@ plugins {
 
 android {
     namespace 'com.wallpaper.nativeapp'
-    compileSdk 34
+    compileSdk 36
 
     defaultConfig {
         applicationId "electrofierro.wallflow"
         minSdk 26
-        targetSdk 34
-        versionCode 1
+        targetSdk 36
+        versionCode 2
         versionName "3.6.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
