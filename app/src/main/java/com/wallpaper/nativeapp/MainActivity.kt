@@ -1,7 +1,6 @@
 package com.wallpaper.nativeapp
 
 import android.app.Activity
-import android.app.WallpaperManager
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
@@ -34,7 +33,6 @@ class MainActivity : AppCompatActivity() {
     // UI Elements
     private lateinit var switchService: SwitchCompat
     private lateinit var btnChangeNow: Button
-    private lateinit var btnEnableLiveWallpaper: Button
     private lateinit var tabHome: TextView
     private lateinit var tabLock: TextView
     private lateinit var layoutHomeSettings: LinearLayout
@@ -104,8 +102,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var switchLockAdaptiveBrightness: SwitchCompat
     private lateinit var switchHomePrioritizeRecent: SwitchCompat
     private lateinit var switchLockPrioritizeRecent: SwitchCompat
-    private lateinit var switchHomeAnimateVideo: SwitchCompat
-    private lateinit var switchLockAnimateVideo: SwitchCompat
 
     private var homePreviewLuminance = 1.0f
     private var lockPreviewLuminance = 1.0f
@@ -166,7 +162,6 @@ class MainActivity : AppCompatActivity() {
     private fun initViews() {
         switchService = findViewById(R.id.switch_service)
         btnChangeNow = findViewById(R.id.btn_change_now)
-        btnEnableLiveWallpaper = findViewById(R.id.btn_enable_live_wallpaper)
         tabHome = findViewById(R.id.tab_home)
         tabLock = findViewById(R.id.tab_lock)
         layoutHomeSettings = findViewById(R.id.layout_home_settings)
@@ -235,8 +230,6 @@ class MainActivity : AppCompatActivity() {
         layoutLockFoldersList = findViewById(R.id.layout_lock_folders_list)
         switchHomePrioritizeRecent = findViewById(R.id.switch_home_prioritize_recent)
         switchLockPrioritizeRecent = findViewById(R.id.switch_lock_prioritize_recent)
-        switchHomeAnimateVideo = findViewById(R.id.switch_home_animate_video)
-        switchLockAnimateVideo = findViewById(R.id.switch_lock_animate_video)
 
         // v0.4 Downloader bindings
         tabDownloader = findViewById(R.id.tab_downloader)
@@ -419,8 +412,6 @@ class MainActivity : AppCompatActivity() {
         switchLockAdaptiveBrightness.isChecked = prefs.getBoolean("lock_adaptive_dim", false)
         switchHomePrioritizeRecent.isChecked = prefs.getBoolean("home_prioritize_recent", true)
         switchLockPrioritizeRecent.isChecked = prefs.getBoolean("lock_prioritize_recent", true)
-        switchHomeAnimateVideo.isChecked = prefs.getBoolean("home_include_video", prefs.getBoolean("home_animate_video", true))
-        switchLockAnimateVideo.isChecked = prefs.getBoolean("lock_include_video", prefs.getBoolean("lock_animate_video", true))
         updateBlacklistButtons()
 
         // CONFIGURACIÓN AUTO-DESCARGADOR (v0.4)
@@ -580,22 +571,6 @@ class MainActivity : AppCompatActivity() {
             prefs.edit().putBoolean("lock_prioritize_recent", isChecked).apply()
         }
 
-        switchHomeAnimateVideo.setOnCheckedChangeListener { _, isChecked ->
-            prefs.edit().apply {
-                putBoolean("home_include_video", isChecked)
-                putBoolean("home_animate_video", isChecked)
-                apply()
-            }
-        }
-
-        switchLockAnimateVideo.setOnCheckedChangeListener { _, isChecked ->
-            prefs.edit().apply {
-                putBoolean("lock_include_video", isChecked)
-                putBoolean("lock_animate_video", isChecked)
-                apply()
-            }
-        }
-
         btnHomeClearBlacklist.setOnClickListener {
             prefs.edit().remove("home_blacklist").apply()
             Toast.makeText(this, "Lista negra de inicio vaciada", Toast.LENGTH_SHORT).show()
@@ -632,23 +607,6 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     Toast.makeText(this@MainActivity, "Error al cambiar fondos. Verifica las carpetas.", Toast.LENGTH_SHORT).show()
                 }
-            }
-        }
-
-        // Botón Activar Video Wallpaper Animado (En Vivo)
-        btnEnableLiveWallpaper.setOnClickListener {
-            try {
-                val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
-                    putExtra(
-                        WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
-                        ComponentName(this@MainActivity, VideoLiveWallpaperService::class.java)
-                    )
-                }
-                startActivity(intent)
-                Toast.makeText(this, "Selecciona WallFlow y presiona 'Aplicar' para reproducir videos animados", Toast.LENGTH_LONG).show()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error al abrir el selector de Live Wallpaper: ${e.message}", e)
-                Toast.makeText(this, "No se pudo abrir el selector de fondos animados del sistema", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -898,7 +856,7 @@ class MainActivity : AppCompatActivity() {
             val blacklist = prefs.getStringSet("${prefix}blacklist", emptySet()) ?: emptySet()
             val filteredImages = images.filter { !blacklist.contains(it.toString()) }
             
-            tvCount.text = "${filteredImages.size} archivos (fotos/videos) encontrados"
+            tvCount.text = "${filteredImages.size} imágenes encontradas"
             
             if (filteredImages.isNotEmpty()) {
                 val order = prefs.getString("${prefix}order", "random") ?: "random"

@@ -8,20 +8,33 @@ android {
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.wallpaper.nativeapp"
+        applicationId "electrofierro.wallflow"
         minSdk 26
         targetSdk 34
         versionCode 1
-        versionName "1.0"
+        versionName "3.6.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        release {
+            storeFile file("release.keystore")
+            storePassword "wallflow2026"
+            keyAlias "wallflow"
+            keyPassword "wallflow2026"
+        }
+    }
+
     buildTypes {
         release {
-            minifyEnabled true
-            shrinkResources true
+            signingConfig signingConfigs.release
+            minifyEnabled false
+            shrinkResources false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            signingConfig signingConfigs.release
         }
     }
     compileOptions {

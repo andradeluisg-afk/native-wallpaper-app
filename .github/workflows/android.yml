@@ -29,12 +29,19 @@ jobs:
       - name: Grant Execute Permission to Gradlew
         run: chmod +x gradlew
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon
+      - name: Build Release APK and AAB Bundle
+        run: ./gradlew assembleRelease bundleRelease --no-daemon
 
-      - name: Upload Debug APK
+      - name: Upload Release APK (Para instalar en tu celular)
         uses: actions/upload-artifact@v4
         with:
-          name: WallpaperNative-App-Debug
-          path: app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 7
+          name: WallFlow-Release-APK
+          path: app/build/outputs/apk/release/app-release.apk
+          retention-days: 14
+
+      - name: Upload Release AAB (Para subir a Google Play)
+        uses: actions/upload-artifact@v4
+        with:
+          name: WallFlow-Release-AAB
+          path: app/build/outputs/bundle/release/app-release.aab
+          retention-days: 14
