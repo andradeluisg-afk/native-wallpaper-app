@@ -21,7 +21,7 @@ object WallpaperDownloader {
      * Consulta la API de Wallhaven, obtiene las URL de las imágenes y las descarga
      * directamente en la carpeta seleccionada por el usuario vía SAF.
      */
-    suspend fun doDownloadBatch(context: Context, force: Boolean = false): Int = withContext(Dispatchers.IO) {
+    suspend fun doDownloadBatch(context: Context, force: Boolean = false, customBatchSize: Int? = null): Int = withContext(Dispatchers.IO) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val enabled = prefs.getBoolean("downloader_enabled", false)
         if (!enabled && !force) {
@@ -46,7 +46,7 @@ object WallpaperDownloader {
             return@withContext 0
         }
 
-        val batchSize = prefs.getInt("downloader_batch_size", 1).coerceIn(1, 4)
+        val batchSize = (customBatchSize ?: prefs.getInt("downloader_batch_size", 1)).coerceIn(1, 10)
         var currentIndex = prefs.getInt("downloader_keyword_index", 0)
 
         // Si el índice de guardado quedó obsoleto por cambiar la lista, lo reseteamos
@@ -67,6 +67,10 @@ object WallpaperDownloader {
             if (downloaded) {
                 successCount++
             }
+            // Pequeña pausa para respetar el límite de peticiones de Wallhaven
+            try {
+                Thread.sleep(400)
+            } catch (ignored: Exception) {}
         }
 
         // Guardar el siguiente índice para la rotación de palabras clave
@@ -78,43 +82,47 @@ object WallpaperDownloader {
     private fun downloadOneImage(context: Context, query: String, folderUri: Uri): Boolean {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         try {
-            // Consulta Wallhaven con sorting=random, limitando a formato vertical y alta resolución
-            val urlString = "https://wallhaven.cc/api/v1/search?q=${Uri.encode(query)}&categories=111&purity=100&sorting=random&ratios=9x16,10x16,9x18&atleast=1080x1920"
-            val response = fetchUrl(urlString) ?: return false
-            
-            val json = JSONObject(response)
-            val dataArray = json.optJSONArray("data") ?: return false
-            if (dataArray.length() == 0) {
-                Log.w(TAG, "No se encontraron imágenes en Wallhaven para la búsqueda: $query")
-                return false
-            }
-            
             // Cargar historial de IDs descargados para evitar repetidos
             val downloadedIds = prefs.getStringSet("downloader_downloaded_ids", emptySet())?.toMutableSet() ?: mutableSetOf()
-            
-            // Buscar la primera imagen del listado que no haya sido descargada antes
             var selectedItem: JSONObject? = null
-            for (j in 0 until dataArray.length()) {
-                val item = dataArray.getJSONObject(j)
-                val id = item.getString("id")
-                if (!downloadedIds.contains(id)) {
-                    selectedItem = item
+
+            // Paginación: busca en hasta 3 páginas para encontrar imágenes nuevas no repetidas
+            for (page in 1..3) {
+                // Consulta Wallhaven con sorting=favorites y ratios=portrait para obtener fondos verticales de máxima calidad
+                val urlString = "https://wallhaven.cc/api/v1/search?q=${Uri.encode(query)}&categories=111&purity=100&sorting=favorites&ratios=portrait&page=$page"
+                val response = fetchUrl(urlString) ?: continue
+                
+                val json = JSONObject(response)
+                val dataArray = json.optJSONArray("data") ?: continue
+                if (dataArray.length() == 0) continue
+
+                // Buscar la primera imagen del listado que no haya sido descargada antes
+                for (j in 0 until dataArray.length()) {
+                    val item = dataArray.getJSONObject(j)
+                    val id = item.getString("id")
+                    if (!downloadedIds.contains(id)) {
+                        selectedItem = item
+                        break
+                    }
+                }
+
+                if (selectedItem != null) {
                     break
                 }
             }
-            
+
             if (selectedItem == null) {
-                Log.d(TAG, "Todas las imágenes de esta página de resultados para '$query' ya fueron descargadas.")
+                Log.d(TAG, "No se encontraron nuevas imágenes disponibles para '$query' en las primeras páginas.")
                 return false
             }
-            
+
             val id = selectedItem.getString("id")
             val imageUrl = selectedItem.getString("path")
-            
+
             // Generar nombre de archivo amigable usando el ID de Wallhaven para evitar colisiones
             val safeQueryName = query.replace("[^a-zA-Z0-9]".toRegex(), "_")
             val fileName = "wallhaven_${safeQueryName}_${id}"
-            
+
             Log.d(TAG, "Encontrada imagen no repetida para '$query' (ID=$id): $imageUrl. Descargando...")
             val success = downloadImageToDocument(context, imageUrl, folderUri, fileName)
             if (success) {

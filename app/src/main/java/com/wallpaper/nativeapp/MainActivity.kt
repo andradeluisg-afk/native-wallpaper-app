@@ -28,6 +28,23 @@ class MainActivity : AppCompatActivity() {
     private val REQ_HOME_FOLDER = 1001
     private val REQ_LOCK_FOLDER = 1002
 
+    companion object {
+        const val REQ_WIZARD_WALLHAVEN_FOLDER = 1004
+        const val REQ_WIZARD_PERSONAL_FOLDER = 1005
+    }
+
+    private var activeWizard: WizardDialog? = null
+
+    fun selectFolderForWizard(isWallhaven: Boolean) {
+        val reqCode = if (isWallhaven) REQ_WIZARD_WALLHAVEN_FOLDER else REQ_WIZARD_PERSONAL_FOLDER
+        selectFolder(reqCode)
+    }
+
+    fun showWizard() {
+        activeWizard = WizardDialog(this)
+        activeWizard?.show()
+    }
+
     private val activityScope = CoroutineScope(Dispatchers.Main + Job())
 
     // UI Elements
@@ -151,6 +168,17 @@ class MainActivity : AppCompatActivity() {
         // Verificar y solicitar permisos de notificaciones si es necesario (Android 13+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 200)
+        }
+
+        // Botón de acceso manual al asistente
+        findViewById<View>(R.id.btn_wizard_launcher)?.setOnClickListener {
+            showWizard()
+        }
+
+        // Mostrar asistente automáticamente en primer inicio o tras esta actualización
+        val wizardDone = prefs.getBoolean("wizard_completed_v1", false)
+        if (!wizardDone) {
+            showWizard()
         }
     }
 
@@ -294,7 +322,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun loadSettings() {
+    fun loadSettings() {
         // Cargar servicio global
         switchService.isChecked = prefs.getBoolean("service_active", false)
 
@@ -796,7 +824,11 @@ class MainActivity : AppCompatActivity() {
 
             val uriString = treeUri.toString()
 
-            if (requestCode == REQ_DOWNLOADER_FOLDER) {
+            if (requestCode == REQ_WIZARD_WALLHAVEN_FOLDER) {
+                activeWizard?.onWallhavenFolderPicked(treeUri)
+            } else if (requestCode == REQ_WIZARD_PERSONAL_FOLDER) {
+                activeWizard?.onPersonalFolderPicked(treeUri)
+            } else if (requestCode == REQ_DOWNLOADER_FOLDER) {
                 prefs.edit().putString("downloader_folder_uri", uriString).apply()
                 val folderName = getFolderName(this, treeUri)
                 tvDownloaderFolderStatus.text = "Carpeta: $folderName"
@@ -996,7 +1028,7 @@ class MainActivity : AppCompatActivity() {
         return if (parts.size > 1) Uri.decode(parts[1]) else Uri.decode(parts[0])
     }
 
-    private fun rescheduleJobs() {
+    fun rescheduleJobs() {
         val isServiceChecked = switchService.isChecked
         
         val homeEnabled = prefs.getBoolean("home_enabled", false)
